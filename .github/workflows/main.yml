@@ -2,7 +2,7 @@ name: YouTube to TikTok Bot
 
 on:
   schedule:
-    - cron: '0 * * * *' # တစ်နာရီတစ်ခါ
+    - cron: '0 * * * *' 
   workflow_dispatch:
 
 concurrency:
@@ -35,6 +35,9 @@ jobs:
         env:
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          YT_COOKIES_DATA: ${{ secrets.YOUTUBE_COOKIES }}
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
           PUPPETEER_EXECUTABLE_PATH: '/usr/bin/chromium-browser'
-        run: node bot.js
+        run: |
+          echo "$YT_COOKIES_DATA" > youtube_cookies.txt
+          node bot.js
