@@ -16,18 +16,23 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          cache: 'npm' # Package တွေကို သိမ်းထားပေးမယ်
 
       - name: Install System Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg google-chrome-stable
+          # Chrome အစား ပိုပေါ့တဲ့ chromium-browser ကို သုံးရင် ပိုမြန်နိုင်တယ်
+          sudo apt-get install -y ffmpeg chromium-browser
 
       - name: Install Dependencies
-        run: npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin yt-dlp-exec
+        # --no-audit နဲ့ --prefer-offline သုံးပြီး မလိုအပ်တာတွေ ကျော်မယ်
+        run: npm install --no-audit --prefer-offline
 
       - name: Run Bot
         env:
-          # 🔥 Secrets တွေကို Bot သိအောင် ချိတ်ဆက်ခြင်း
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # Puppeteer ကို System Chrome ကို သုံးခိုင်းပြီး ဒေါင်းလုဒ် ကျော်မယ်
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+          PUPPETEER_EXECUTABLE_PATH: '/usr/bin/chromium-browser'
         run: node bot.js
