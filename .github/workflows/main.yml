@@ -2,7 +2,7 @@ name: YouTube to TikTok Bot
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # မိနစ် ၃၀ တစ်ခါ အလုပ်လုပ်မည်
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -17,15 +17,17 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install System Dependencies
+      - name: Install System Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg google-chrome-stable
 
-      - name: Install NPM Packages
+      - name: Install Dependencies
         run: npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin yt-dlp-exec
 
       - name: Run Bot
         env:
+          # 🔥 Secrets တွေကို Bot သိအောင် ချိတ်ဆက်ခြင်း
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node bot.js
