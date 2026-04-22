@@ -24,9 +24,11 @@ jobs:
       - name: Install System Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg chromium-browser
+          sudo apt-get install -y ffmpeg chromium-browser python3-pip
           sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
           sudo chmod a+rx /usr/local/bin/yt-dlp
+          # yt-dlp ကို အမြဲတမ်း နောက်ဆုံး version ဖြစ်အောင် လုပ်မယ်
+          sudo /usr/local/bin/yt-dlp -U
 
       - name: Install Dependencies
         run: npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin
