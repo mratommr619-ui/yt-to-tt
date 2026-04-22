@@ -1,13 +1,9 @@
-name: YouTube to TikTok Bot
+name: Video Splitter and TikTok Uploader
 
 on:
   schedule:
-    - cron: '0 * * * *' 
+    - cron: '*/30 * * * *' # ၃၀ မိနစ်တစ်ခါ Run မည်
   workflow_dispatch:
-
-concurrency:
-  group: tiktok-bot
-  cancel-in-progress: true
 
 jobs:
   run-bot:
@@ -24,10 +20,7 @@ jobs:
       - name: Install System Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg chromium-browser python3-pip
-          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-          sudo chmod a+rx /usr/local/bin/yt-dlp
-          sudo /usr/local/bin/yt-dlp -U
+          sudo apt-get install -y ffmpeg chromium-browser
 
       - name: Install Dependencies
         run: npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin
@@ -36,9 +29,6 @@ jobs:
         env:
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          YT_COOKIES_DATA: ${{ secrets.YOUTUBE_COOKIES }}
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
           PUPPETEER_EXECUTABLE_PATH: '/usr/bin/chromium-browser'
-        run: |
-          echo "$YT_COOKIES_DATA" > youtube_cookies.txt
-          node bot.js
+        run: node bot.js
