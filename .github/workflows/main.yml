@@ -14,20 +14,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install System Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg chromium-browser python3-pip
+          # yt-dlp အသစ်ဆုံးကို သွင်းပြီး Update လုပ်မယ်
           sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
           sudo chmod a+rx /usr/local/bin/yt-dlp
-          # yt-dlp ကို အမြဲတမ်း နောက်ဆုံး version ဖြစ်အောင် လုပ်မယ်
           sudo /usr/local/bin/yt-dlp -U
 
       - name: Install Dependencies
