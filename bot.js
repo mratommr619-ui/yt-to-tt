@@ -6,7 +6,7 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 puppeteer.use(StealthPlugin());
 
-// Firebase Initialization
+// Firebase Setup
 try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
@@ -16,7 +16,7 @@ try {
 }
 const db = admin.firestore();
 
-// TikTok Upload Function
+// TikTok Upload Logic
 async function uploadToTikTok(videoPath, movieName, partLabel) {
     const browser = await puppeteer.launch({
         headless: true,
@@ -32,7 +32,7 @@ async function uploadToTikTok(videoPath, movieName, partLabel) {
         const fileInput = await page.$('input[type="file"]');
         await fileInput.uploadFile(videoPath);
         
-        await new Promise(r => setTimeout(r, 30000)); // ဗီဒီယို တက်အောင် စောင့်မယ်
+        await new Promise(r => setTimeout(r, 35000)); // Upload စောင့်ချိန်
 
         const fullCaption = `${movieName} (${partLabel}) #foryou #fyp #movie`;
         await page.waitForSelector('.public-DraftEditor-content');
@@ -41,7 +41,7 @@ async function uploadToTikTok(videoPath, movieName, partLabel) {
 
         await new Promise(r => setTimeout(r, 10000));
         await page.click('button[class*="button-post"]');
-        console.log(`✅ Upload Success: ${partLabel}`);
+        console.log(`✅ Upload Done: ${partLabel}`);
     } catch (err) {
         console.error("TikTok Error:", err.message);
     } finally {
@@ -49,17 +49,17 @@ async function uploadToTikTok(videoPath, movieName, partLabel) {
     }
 }
 
-// YouTube Download Logic
+// YouTube Bypass Strategy
 function downloadVideo(url, output) {
-    console.log("📥 Downloading with bypass strategy...");
+    console.log("📥 Downloading with Bypass Strategy...");
     try {
-        // အရင်ဆုံး format မရွေးဘဲ အကောင်းဆုံးကို ဒေါင်းပြီး mkv ထုတ်မယ်
-        execSync(`yt-dlp --cookies youtube_cookies.txt "${url}" -o "temp_video.mkv" --format "bestvideo+bestaudio/best" --merge-output-format mkv --no-check-certificates`);
-        // ဒေါင်းပြီးသားကို standard mp4 ပြန်ပြောင်းမယ် (ဖြတ်ရလွယ်အောင်)
-        execSync(`ffmpeg -y -i temp_video.mkv -c:v libx264 -preset fast -crf 23 -c:a aac "${output}"`);
+        // အကောင်းဆုံး Format ကို ဒေါင်းပြီး mkv အဖြစ် အရင်သိမ်းမယ်
+        execSync(`yt-dlp --cookies youtube_cookies.txt "${url}" -o "temp.mkv" --no-check-certificate --no-warnings`);
+        // ဒေါင်းပြီးသားဖိုင်ကို Standard MP4 (H.264) ပြန်ပြောင်းမယ်
+        execSync(`ffmpeg -y -i temp.mkv -c:v libx264 -preset superfast -crf 26 -c:a aac "${output}"`);
     } catch (e) {
-        console.log("⚠️ MKV download failed, trying simple MP4...");
-        execSync(`yt-dlp --cookies youtube_cookies.txt "${url}" -o "${output}" -f "best" --no-check-certificates`);
+        console.log("⚠️ MKV failed, trying direct MP4...");
+        execSync(`yt-dlp --cookies youtube_cookies.txt "${url}" -o "${output}" -f "b" --no-check-certificate`);
     }
 }
 
@@ -68,14 +68,14 @@ async function startBot() {
     
     if (taskSnap.empty) {
         taskSnap = await db.collection('tasks').where('status', '==', 'pending').limit(1).get();
-        if (taskSnap.empty) return console.log("💤 No pending tasks.");
+        if (taskSnap.empty) return console.log("💤 No tasks found.");
         
         const taskDoc = taskSnap.docs[0];
         const { videoUrl } = taskDoc.data();
         
         downloadVideo(videoUrl, "raw.mp4");
         
-        console.log("✂️ Splitting into parts...");
+        console.log("✂️ Splitting video...");
         execSync(`ffmpeg -i "raw.mp4" -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"`);
         
         const files = fs.readdirSync('.').filter(f => f.startsWith('part_') && f.endsWith('.mp4'));
@@ -99,7 +99,7 @@ async function startBot() {
             execSync(`ffmpeg -i "raw.mp4" -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"`);
         }
 
-        // စာသားထည့်မယ်
+        // ဗီဒီယိုပေါ် စာသားထည့်မယ်
         execSync(`ffmpeg -y -i "part_${fileIndex}.mp4" -vf "drawtext=text='${label}':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=50" "final.mp4"`);
         await uploadToTikTok("final.mp4", movieName || "Review", label);
         await partDoc.ref.update({ status: 'completed' });
