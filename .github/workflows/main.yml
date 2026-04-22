@@ -1,0 +1,33 @@
+name: Video Processor Bot
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # မိနစ် ၃၀ တစ်ခါ အလိုအလျောက် run မယ်
+  workflow_dispatch: # လက်နဲ့ နှိပ်ပြီး run ချင်ရင်လည်း ရတယ်
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg python3
+
+      - name: Install project dependencies
+        run: npm install
+
+      - name: Create Service Account Key
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > serviceAccountKey.json
+
+      - name: Run Bot
+        run: node bot.js
