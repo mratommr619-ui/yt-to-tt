@@ -6,7 +6,6 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 puppeteer.use(StealthPlugin());
 
-// Firebase Setup
 try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
@@ -37,7 +36,7 @@ async function uploadToTikTok(videoPath, movieName, partLabel) {
         await page.click('.public-DraftEditor-content');
         await page.keyboard.sendCharacter(fullCaption);
 
-        await new Promise(r => setTimeout(r, 5000));
+        await new Promise(r => setTimeout(r, 10000));
         await page.click('button[class*="button-post"]');
         console.log(`✅ Uploaded: ${partLabel}`);
     } catch (err) {
@@ -49,6 +48,7 @@ async function uploadToTikTok(videoPath, movieName, partLabel) {
 
 async function startBot() {
     let taskSnap = await db.collection('tasks').where('status', '==', 'processing').limit(1).get();
+    
     if (taskSnap.empty) {
         taskSnap = await db.collection('tasks').where('status', '==', 'pending').limit(1).get();
         if (taskSnap.empty) return console.log("💤 No tasks.");
@@ -56,8 +56,9 @@ async function startBot() {
         const taskDoc = taskSnap.docs[0];
         const { videoUrl } = taskDoc.data();
         
-        console.log("📥 Downloading & Splitting...");
-        execSync(`yt-dlp "${videoUrl}" -o "raw.mp4" -f "mp4"`);
+        console.log("📥 Downloading & Splitting with Cookies...");
+        // YouTube Cookie သုံးပြီး ဒေါင်းခြင်း
+        execSync(`yt-dlp --cookies youtube_cookies.txt "${videoUrl}" -o "raw.mp4" -f "mp4"`);
         execSync(`ffmpeg -i "raw.mp4" -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"`);
         
         const files = fs.readdirSync('.').filter(f => f.startsWith('part_') && f.endsWith('.mp4'));
@@ -77,12 +78,11 @@ async function startBot() {
         const { movieName, videoUrl } = taskDoc.data();
 
         if (!fs.existsSync(`part_${fileIndex}.mp4`)) {
-            execSync(`yt-dlp "${videoUrl}" -o "raw.mp4" -f "mp4"`);
+            execSync(`yt-dlp --cookies youtube_cookies.txt "${videoUrl}" -o "raw.mp4" -f "mp4"`);
             execSync(`ffmpeg -i "raw.mp4" -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"`);
         }
 
-        // FFMPEG drawtext စာသားထည့်ခြင်း
-        execSync(`ffmpeg -i "part_${fileIndex}.mp4" -vf "drawtext=text='${label}':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=50" "final.mp4"`);
+        execSync(`ffmpeg -y -i "part_${fileIndex}.mp4" -vf "drawtext=text='${label}':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=50" "final.mp4"`);
         await uploadToTikTok("final.mp4", movieName || "Trending", label);
         await partDoc.ref.update({ status: 'completed' });
 
