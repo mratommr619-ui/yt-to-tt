@@ -17,14 +17,15 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install Dependencies
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg google-chrome-stable
-          npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin yt-dlp-exec
+
+      - name: Install NPM Packages
+        run: npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin yt-dlp-exec
 
       - name: Run Bot
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
         run: node bot.js
