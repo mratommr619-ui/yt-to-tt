@@ -2,8 +2,12 @@ name: YouTube to TikTok Bot
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '0 * * * *' # တစ်နာရီတစ်ခါ
   workflow_dispatch:
+
+concurrency:
+  group: tiktok-bot
+  cancel-in-progress: true
 
 jobs:
   run-bot:
@@ -16,23 +20,21 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          #cache: 'npm' # Package တွေကို သိမ်းထားပေးမယ်
 
       - name: Install System Tools
         run: |
           sudo apt-get update
-          # Chrome အစား ပိုပေါ့တဲ့ chromium-browser ကို သုံးရင် ပိုမြန်နိုင်တယ်
           sudo apt-get install -y ffmpeg chromium-browser
+          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
 
       - name: Install Dependencies
-        # --no-audit နဲ့ --prefer-offline သုံးပြီး မလိုအပ်တာတွေ ကျော်မယ်
-        run: npm install --no-audit --prefer-offline
+        run: npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin
 
       - name: Run Bot
         env:
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          # Puppeteer ကို System Chrome ကို သုံးခိုင်းပြီး ဒေါင်းလုဒ် ကျော်မယ်
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
           PUPPETEER_EXECUTABLE_PATH: '/usr/bin/chromium-browser'
         run: node bot.js
