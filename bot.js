@@ -6,15 +6,12 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 puppeteer.use(StealthPlugin());
 
-try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-} catch (e) {
-    process.exit(1);
-}
+// Firebase Setup
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-async function uploadToTikTok(videoPath, movieName, partLabel) {
+async function uploadToTikTok(videoPath, caption) {
     const browser = await puppeteer.launch({
         headless: true,
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -25,16 +22,20 @@ async function uploadToTikTok(videoPath, movieName, partLabel) {
         const cookies = JSON.parse(process.env.TIKTOK_COOKIES);
         await page.setCookie(...cookies);
         await page.goto('https://www.tiktok.com/creator-center/upload?from=upload', { waitUntil: 'networkidle2' });
+        
         const fileInput = await page.waitForSelector('input[type="file"]');
         await fileInput.uploadFile(videoPath);
+        
+        console.log("⌛ Video တက်အောင် ခဏစောင့်နေပါသည်...");
         await new Promise(r => setTimeout(r, 40000)); 
-        const fullCaption = `${movieName} (${partLabel}) #foryou #fyp #movie`;
+
         await page.waitForSelector('.public-DraftEditor-content');
         await page.click('.public-DraftEditor-content');
-        await page.keyboard.sendCharacter(fullCaption);
+        await page.keyboard.sendCharacter(caption);
+
         await new Promise(r => setTimeout(r, 10000));
         await page.click('button[class*="button-post"]');
-        console.log(`✅ Upload Success: ${partLabel}`);
+        console.log(`✅ တင်ပြီးပါပြီ: ${caption}`);
     } catch (err) {
         console.error("❌ TikTok Error:", err.message);
     } finally {
@@ -42,52 +43,59 @@ async function uploadToTikTok(videoPath, movieName, partLabel) {
     }
 }
 
-function downloadVideo(url, output) {
-    console.log("📥 Attempting Download with Browser Bypass...");
-    const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-    try {
-        // User Agent နဲ့ Cookie ကို ပေါင်းသုံးပြီး အစွမ်းကုန် ကျော်မယ်
-        execSync(`yt-dlp --cookies youtube_cookies.txt --user-agent "${userAgent}" "${url}" -o "temp.mkv" --no-check-certificate --no-warnings`);
-        execSync(`ffmpeg -y -i temp.mkv -c:v libx264 -preset fast -crf 26 -c:a aac "${output}"`);
-    } catch (e) {
-        console.log("⚠️ Failed! Trying Mobile Bypass...");
-        const mobileUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
-        execSync(`yt-dlp --cookies youtube_cookies.txt --user-agent "${mobileUA}" "${url}" -o "${output}" -f "b" --no-check-certificate`);
-    }
-}
-
 async function startBot() {
+    // လက်ရှိ လုပ်ဆောင်နေဆဲ Task ကို ရှာမည်
     let taskSnap = await db.collection('tasks').where('status', '==', 'processing').limit(1).get();
+    
     if (taskSnap.empty) {
+        // အသစ်တက်လာတဲ့ Task ကို ရှာမည်
         taskSnap = await db.collection('tasks').where('status', '==', 'pending').limit(1).get();
-        if (taskSnap.empty) return console.log("💤 No tasks.");
+        if (taskSnap.empty) return console.log("💤 တင်စရာ ဗီဒီယို မရှိသေးပါ။");
+
         const taskDoc = taskSnap.docs[0];
-        const { videoUrl } = taskDoc.data();
-        try {
-            downloadVideo(videoUrl, "raw.mp4");
-            execSync(`ffmpeg -i "raw.mp4" -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"`);
-            const files = fs.readdirSync('.').filter(f => f.startsWith('part_') && f.endsWith('.mp4'));
-            for (let i = 0; i < files.length; i++) {
-                await taskDoc.ref.collection('parts').doc(`p${i}`).set({ fileIndex: i, label: `Part ${i+1}`, status: 'pending' });
-            }
-            await taskDoc.ref.update({ status: 'processing' });
-        } catch (e) { console.error(e.message); return; }
+        const { movieName, localFileName } = taskDoc.data(); 
+
+        // ဗီဒီယိုကို ၅ မိနစ်စီ ဖြတ်မည်
+        console.log("✂️ ဗီဒီယို ဖြတ်နေပါသည်...");
+        execSync(`ffmpeg -i "${localFileName}" -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"`);
+
+        const files = fs.readdirSync('.').filter(f => f.startsWith('part_') && f.endsWith('.mp4'));
+        for (let i = 0; i < files.length; i++) {
+            const isLast = (i === files.length - 1);
+            const label = isLast ? "End Part" : `Part ${i+1}`;
+            await taskDoc.ref.collection('parts').doc(`p${i}`).set({ 
+                fileIndex: i, 
+                label: label, 
+                status: 'pending' 
+            });
+        }
+        await taskDoc.ref.update({ status: 'processing' });
     }
+
     const taskDoc = taskSnap.docs[0];
+    const { movieName } = taskDoc.data();
+    
+    // တင်ရန် ကျန်နေသော အပိုင်းကို ရှာမည်
     const partSnap = await taskDoc.ref.collection('parts').where('status', '==', 'pending').orderBy('fileIndex').limit(1).get();
+
     if (!partSnap.empty) {
         const partDoc = partSnap.docs[0];
         const { fileIndex, label } = partDoc.data();
-        const { movieName, videoUrl } = taskDoc.data();
-        if (!fs.existsSync(`part_${fileIndex}.mp4`)) {
-            downloadVideo(videoUrl, "raw.mp4");
-            execSync(`ffmpeg -i "raw.mp4" -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"`);
-        }
-        execSync(`ffmpeg -y -i "part_${fileIndex}.mp4" -vf "drawtext=text='${label}':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=50" "final.mp4"`);
-        await uploadToTikTok("final.mp4", movieName, label);
+        const inputPath = `part_${fileIndex}.mp4`;
+
+        // ဗီဒီယို Thumbnail ပေါ်မှာ Part နံပါတ် စာသားထည့်မည်
+        console.log(`✍️ စာသားထည့်နေပါသည်: ${label}`);
+        execSync(`ffmpeg -y -i "${inputPath}" -vf "drawtext=text='${label}':fontcolor=white:fontsize=70:box=1:boxcolor=black@0.6:boxborderw=15:x=(w-text_w)/2:y=80" "final_upload.mp4"`);
+
+        const caption = `${movieName} - ${label} #foryou #fyp #tiktok #movie`;
+        await uploadToTikTok("final_upload.mp4", caption);
+        
         await partDoc.ref.update({ status: 'completed' });
+
+        // အကုန်ပြီးမပြီး စစ်မည်
         const remain = await taskDoc.ref.collection('parts').where('status', '==', 'pending').count().get();
         if (remain.data().count === 0) await taskDoc.ref.update({ status: 'completed' });
     }
 }
+
 startBot();
