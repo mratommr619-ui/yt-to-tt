@@ -12,7 +12,7 @@ try {
 } catch (e) { process.exit(1); }
 const db = admin.firestore();
 
-// Universal Downloader
+// Download & Split Functions (မူလအတိုင်း)
 function downloadVideo(url, output) {
     console.log(`📥 Downloading: ${url}`);
     let finalUrl = url;
@@ -30,30 +30,55 @@ function downloadVideo(url, output) {
     } else { throw new Error("Download failed."); }
 }
 
-// TikTok Upload Logic
+// 🔥 TikTok Login & Upload with Username/Password
 async function uploadToTikTok(videoPath, caption) {
-    console.log(`📤 Uploading to TikTok: ${caption}`);
+    console.log("🔐 Logging in to TikTok...");
     const browser = await puppeteer.launch({
-        headless: true,
+        headless: true, // Captcha ပြဿနာတက်ရင် false ပြောင်းစမ်းလို့ရတယ်
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1920,1080']
     });
     const page = await browser.newPage();
+    await page.setViewport({ width: 1920, height: 1080 });
+
     try {
-        const cookies = JSON.parse(process.env.TIKTOK_COOKIES);
-        await page.setCookie(...cookies);
+        // 1. Login Page ကိုသွားမယ်
+        await page.goto('https://www.tiktok.com/login/phone-or-email/email', { waitUntil: 'networkidle2' });
+        
+        console.log("⌨️ Entering Credentials...");
+        await page.type('input[name="username"]', process.env.TIKTOK_USERNAME, { delay: 100 });
+        await page.type('input[type="password"]', process.env.TIKTOK_PASSWORD, { delay: 100 });
+        
+        await page.click('button[type="submit"]');
+        
+        // Login ဝင်ဖို့ စောင့်မယ် (Captcha ပေါ်လာရင်တော့ manual ဖြေဖို့လိုနိုင်တယ်၊ ဒါပေမဲ့ Stealth mode က အတော်ကျော်နိုင်ပါတယ်)
+        console.log("⌛ Waiting for Login to settle...");
+        await new Promise(r => setTimeout(r, 15000)); 
+
+        // 2. Upload Page ကိုသွားမယ်
         await page.goto('https://www.tiktok.com/creator-center/upload?from=upload', { waitUntil: 'networkidle2' });
+        
+        console.log("📤 Uploading Video...");
         const fileInput = await page.waitForSelector('input[type="file"]');
         await fileInput.uploadFile(videoPath);
-        await new Promise(r => setTimeout(r, 60000)); 
+        
+        await new Promise(r => setTimeout(r, 60000)); // ဗီဒီယိုတင်ဖို့ စောင့်ချိန်
+
+        // Caption ထည့်မယ်
         await page.waitForSelector('.public-DraftEditor-content');
         await page.click('.public-DraftEditor-content');
         await page.keyboard.sendCharacter(caption);
-        await new Promise(r => setTimeout(r, 15000));
+
+        await new Promise(r => setTimeout(r, 10000));
+
+        // Post ခလုတ်နှိပ်မယ်
         await page.click('button[class*="button-post"]');
-        console.log("✅ TikTok Post Completed!");
+        console.log("✅ TikTok Post Completed Successfully!");
+
     } catch (err) {
         console.error("❌ TikTok Error:", err.message);
+        // Error ဖြစ်တဲ့အချိန်မှာ ဘာဖြစ်နေလဲ သိရအောင် ScreenShot ရိုက်ခိုင်းလို့ရတယ်
+        await page.screenshot({ path: 'error_screenshot.png' });
     } finally {
         await browser.close();
     }
@@ -77,20 +102,14 @@ async function startBot() {
                 await taskDoc.ref.collection('parts').doc(`p${i}`).set({ fileIndex: i, label: label, status: 'pending' });
             }
             await taskDoc.ref.update({ status: 'processing' });
-            
-            // 🧹 ပထမဆုံးအကြိမ် ခွဲပြီးတာနဲ့ မူရင်း "movie.mp4" ကြီးကို ဖျက်မယ် (နေရာချွေတာဖို့)
-            if (fs.existsSync("movie.mp4")) {
-                fs.unlinkSync("movie.mp4");
-                console.log("🗑️ Original movie file deleted to save space.");
-            }
-
+            if (fs.existsSync("movie.mp4")) fs.unlinkSync("movie.mp4");
         } catch (e) {
             await taskDoc.ref.update({ status: 'error' });
             return;
         }
     } else {
         const procSnap = await db.collection('tasks').where('status', '==', 'processing').orderBy('createdAt', 'asc').limit(1).get();
-        if (procSnap.empty) return console.log("💤 No tasks.");
+        if (procSnap.empty) return console.log("💤 Queue Empty.");
         taskDoc = procSnap.docs[0];
     }
 
@@ -104,7 +123,6 @@ async function startBot() {
 
         if (fs.existsSync(partFile)) {
             console.log(`🎬 Processing ${label}...`);
-            
             const watermark = "@juneking619";
             const xPos = "(w-text_w)/2 + ((w-text_w)/2)*sin(2*PI*t/30)";
             const yPos = "(h-text_h)/2 + ((h-text_h)/2)*cos(2*PI*t/20)";
@@ -118,18 +136,12 @@ async function startBot() {
             await uploadToTikTok("final.mp4", caption);
             
             await partDoc.ref.update({ status: 'completed' });
-
-            // 🧹 တင်ပြီးသွားတဲ့ အပိုင်း (Part) ကို ချက်ချင်းဖျက်မယ်
             if (fs.existsSync(partFile)) fs.unlinkSync(partFile);
             if (fs.existsSync("final.mp4")) fs.unlinkSync("final.mp4");
-            console.log(`🗑️ Deleted ${partFile} and final.mp4 after upload.`);
         }
 
         const remain = await taskDoc.ref.collection('parts').where('status', '==', 'pending').get();
-        if (remain.size === 0) {
-            await taskDoc.ref.update({ status: 'completed' });
-            console.log("🏁 Task fully completed. All files cleaned.");
-        }
+        if (remain.size === 0) await taskDoc.ref.update({ status: 'completed' });
     }
 }
 startBot();
