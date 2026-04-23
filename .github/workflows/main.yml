@@ -1,37 +1,35 @@
-name: Universal Video Bot (Drive & Link Mode)
+name: Movie Splitting to Telegram
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'
   workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *' # မိနစ် ၃၀ တစ်ခါ အလိုအလျောက် Run မည်
 
 jobs:
-  run-bot:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: '20'
 
-      - name: Install System Tools
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg chromium-browser python3-pip
-          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-          sudo chmod a+rx /usr/local/bin/yt-dlp
-          sudo /usr/local/bin/yt-dlp -U
+          sudo apt-get install -y ffmpeg python3-pip
+          pip3 install yt-dlp
 
-      - name: Install Dependencies
-        run: npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin
+      - name: Install Node Modules
+        run: |
+          npm install firebase-admin axios form-data
 
       - name: Run Bot
-        env:
-          TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
-          PUPPETEER_EXECUTABLE_PATH: '/usr/bin/chromium-browser'
         run: node bot.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
