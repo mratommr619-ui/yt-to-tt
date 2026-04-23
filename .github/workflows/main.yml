@@ -36,4 +36,5 @@ jobs:
         run: xvfb-run --auto-servernum python bot.py
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          TIKTOK_SESSIONID: ${{ secrets.TIKTOK_SESSIONID }}
+          TIKTOK_USERNAME: ${{ secrets.TIKTOK_USERNAME }}
+          TIKTOK_PASSWORD: ${{ secrets.TIKTOK_PASSWORD }}
