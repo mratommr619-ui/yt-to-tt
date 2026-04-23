@@ -16,17 +16,24 @@ except Exception as e:
     print(f"❌ Firebase Setup Error: {e}")
     exit(1)
 
-# --- [၂] TikTok Cloud Uploader (Using sessionid) ---
+# --- [၂] TikTok Cloud Uploader (Session ID Bug Fix) ---
 def upload_to_tiktok(video_path, caption):
     session_id = os.environ.get('TIKTOK_SESSIONID')
     if not session_id:
-        print("⚠️ No TIKTOK_SESSIONID found in Secrets. Skipping TikTok upload.")
+        print("⚠️ No TIKTOK_SESSIONID found in Secrets.")
         return False
         
     try:
         print(f"🚀 Cloud Uploading {video_path} to TikTok...")
-        # Cookie အရှည်ကြီးတွေအစား sessionid တစ်ကြောင်းတည်းကို အသုံးပြုခြင်း
-        upload_video(video_path, description=caption, sessionid=session_id)
+        
+        # [အရေးကြီးပြင်ဆင်ချက်] Library ၏ Bug ကို ကျော်ရန်
+        # Session ID ကို TikTok Domain ဖြင့် အတင်းချိတ်ဆက်၍ Cookie ဖိုင်ဖန်တီးခြင်း
+        cookie_content = f".tiktok.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t{session_id}\n"
+        with open('auth.txt', 'w', encoding='utf-8') as f:
+            f.write(cookie_content)
+        
+        # sessionid အစား ဖန်တီးထားသော auth.txt ဖိုင်ကို အသုံးပြု၍ တင်ခြင်း
+        upload_video(video_path, description=caption, cookies='auth.txt')
         print("✅ TikTok Upload Finished!")
         return True
     except Exception as e:
@@ -141,6 +148,7 @@ def start_bot():
             
             if os.path.exists(part_file): os.remove(part_file)
             if os.path.exists("final.mp4"): os.remove("final.mp4")
+            if os.path.exists("auth.txt"): os.remove("auth.txt")
 
         remain = list(parts_ref.where('status', '==', 'pending').stream())
         if len(remain) == 0:
