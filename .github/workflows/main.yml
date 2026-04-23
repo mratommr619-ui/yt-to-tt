@@ -1,9 +1,9 @@
-name: Movie Splitting to Telegram
+name: Movie Splitting and Cloud Upload Bot
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/30 * * * *' # မိနစ် ၃၀ တစ်ခါ အလိုအလျောက် Run မည်
+    - cron: '*/30 * * * *' # မိနစ် ၃၀ တစ်ခါ Run မည်
 
 jobs:
   build:
@@ -12,24 +12,24 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
-          node-version: '20'
+          python-version: '3.10'
 
-      - name: Install System Dependencies
+      - name: Install System Dependencies (FFmpeg)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg python3-pip
-          pip3 install yt-dlp
+          sudo apt-get install -y ffmpeg
 
-      - name: Install Node Modules
+      - name: Install Python Packages
         run: |
-          npm install firebase-admin axios form-data
+          pip install -r requirements.txt
 
       - name: Run Bot
-        run: node bot.js
+        run: python bot.py
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
