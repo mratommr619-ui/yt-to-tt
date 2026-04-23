@@ -5,6 +5,7 @@ import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
 from tiktok_uploader.upload import upload_video
+from pytubefix import YouTube
 
 # --- [၁] Firebase Setup ---
 try:
@@ -55,44 +56,26 @@ def upload_to_tiktok(video_path, caption):
         print(f"❌ TikTok Upload Error: {e}")
         return False
 
-# --- [၄] API Downloader (No yt-dlp, No Cookies needed) ---
+# --- [၄] PyTubeFix Downloader (No external APIs, bypassing via Android Client) ---
 def download_youtube_video(video_url):
-    print("📥 Bypassing yt-dlp using Cobalt API...")
-    api_url = "https://api.cobalt.tools/api/json"
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "Origin": "https://cobalt.tools",
-        "Referer": "https://cobalt.tools/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    data = {
-        "url": video_url,
-        "vQuality": "720", 
-        "isAudioOnly": False
-    }
-    
+    print("📥 Downloading via PyTubeFix (Android Client)...")
     try:
-        res = requests.post(api_url, json=data, headers=headers)
-        result = res.json()
+        # YouTube Android App အနေဖြင့် ဝင်ရောက်ခြင်း
+        yt = YouTube(video_url, client='ANDROID')
         
-        if "url" not in result:
-            print(f"❌ API Error: {result}")
+        # MP4 Format နှင့် Resolution အကောင်းဆုံးကို ရွေးချယ်ခြင်း
+        stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+        
+        if not stream:
+            print("❌ No valid MP4 stream found!")
             return False
             
-        download_url = result["url"]
-        print("📥 Direct Link Found! Downloading MP4...")
-        
-        video_data = requests.get(download_url, stream=True)
-        with open("movie.mp4", 'wb') as f:
-            for chunk in video_data.iter_content(chunk_size=1024*1024):
-                if chunk:
-                    f.write(chunk)
-                    
+        print(f"📥 Found stream ({stream.resolution}). Downloading...")
+        stream.download(filename="movie.mp4")
         print("✅ Video Downloaded Successfully!")
         return True
     except Exception as e:
-        print(f"❌ Download Error: {e}")
+        print(f"❌ PyTubeFix Download Error: {e}")
         return False
 
 # --- [၅] Main Process ---
