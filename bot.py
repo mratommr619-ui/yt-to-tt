@@ -1,6 +1,5 @@
 import os
 import json
-import time
 import subprocess
 import requests
 import firebase_admin
@@ -50,7 +49,6 @@ def upload_to_tiktok(video_path, caption):
         with open('auth.txt', 'w', encoding='utf-8') as f:
             f.write(cookies_str)
         
-        # TikTok Library ကိုသုံးပြီး တင်ခြင်း
         upload_video(video_path, description=caption, cookies='auth.txt')
         print("✅ TikTok Upload Finished!")
         return True
@@ -58,7 +56,7 @@ def upload_to_tiktok(video_path, caption):
         print(f"❌ TikTok Upload Error: {e}")
         return False
 
-# --- [၄] YouTube Downloader (Anti-Ban ပါဝင်သည်) ---
+# --- [၄] YouTube Downloader (Anti-Ban & Cookies) ---
 def download_youtube_video(video_url):
     print("📥 Downloading YouTube video...")
     ydl_opts = {
@@ -73,19 +71,32 @@ def download_youtube_video(video_url):
         },
         'geo_bypass': True,
     }
+    
+    yt_cookies_str = os.environ.get('YOUTUBE_COOKIES')
+    if yt_cookies_str:
+        try:
+            with open('yt_cookies.txt', 'w', encoding='utf-8') as f:
+                f.write(yt_cookies_str)
+            ydl_opts['cookiefile'] = 'yt_cookies.txt'
+            print("🍪 Using YouTube Cookies to bypass bot check...")
+        except Exception as e:
+            print(f"⚠️ Could not write YouTube cookies: {e}")
+    else:
+        print("⚠️ Warning: No YOUTUBE_COOKIES found in Secrets.")
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
+        if os.path.exists("yt_cookies.txt"): os.remove("yt_cookies.txt")
         return True
     except Exception as e:
         print(f"❌ YouTube Download Error: {e}")
+        if os.path.exists("yt_cookies.txt"): os.remove("yt_cookies.txt")
         return False
 
 # --- [၅] Main Process ---
 def start_bot():
     tasks_ref = db.collection('tasks')
-    
-    # Task အသစ် စစ်ဆေးခြင်း
     pending_query = list(tasks_ref.where('status', '==', 'pending').order_by('createdAt').limit(1).stream())
     
     task_doc = None
@@ -110,7 +121,6 @@ def start_bot():
                 })
             
             task_doc.reference.update({'status': 'processing'})
-            # မူရင်းဖိုင်ကြီးကို ဖျက်ခြင်း
             if os.path.exists("movie.mp4"): os.remove("movie.mp4")
             
         except Exception as e:
@@ -142,32 +152,26 @@ def start_bot():
             try:
                 print(f"🎬 Processing {label} with Moving Watermark...")
                 
-                # ၁။ @juneking619 စာသားကို ဗီဒီယိုအနှံ့ ပတ်ပြေးနေအောင်လုပ်ခြင်း (Moving Watermark)
-                # Logic: x နေရာကို စက္ကန့်အလိုက် ပြောင်းမယ်၊ y နေရာကိုလည်း ပြောင်းမယ်
+                # ၁။ @juneking619 (Moving Watermark)
                 moving_watermark = (
                     "drawtext=text='@juneking619':fontcolor=white@0.4:fontsize=35:"
                     "x='if(lt(mod(t,20),10),10+(w-text_w-20)*(mod(t,10)/10),w-text_w-10-(w-text_w-20)*(mod(t,10)/10))':"
                     "y='if(lt(mod(t,14),7),10+(h-text_h-20)*(mod(t,7)/7),h-text_h-10-(h-text_h-20)*(mod(t,7)/7))'"
                 )
 
-                # ၂။ Movie Name (အောက်ခြေအလယ်တွင် ငြိမ်နေမည်)
+                # ၂။ Movie Name
                 movie_label = f"drawtext=text='{movie_name}':fontcolor=white@0.7:fontsize=40:x=(w-text_w)/2:y=h-80"
                 
-                # ၃။ Part Label (အလယ်တွင် ၃ စက္ကန့်သာ ပေါ်မည်)
+                # ၃။ Part Label
                 part_label = f"drawtext=text='{label}':fontcolor=white:fontsize=80:borderw=4:bordercolor=red:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,3)'"
                 
-                # FFmpeg ဖြင့် ဗီဒီယိုထုတ်လုပ်ခြင်း
                 subprocess.run(f'ffmpeg -y -i "{part_file}" -vf "{moving_watermark},{movie_label},{part_label}" "final.mp4"', shell=True, check=True)
 
                 caption = f"{movie_name} - {label} {hashtags} @juneking619"
                 
-                # Telegram ပို့ခြင်း
                 file_id = send_to_telegram("final.mp4", caption)
-                
-                # TikTok တင်ခြင်း
                 upload_to_tiktok("final.mp4", caption)
                 
-                # Firestore Update
                 part_doc.reference.update({ 
                     'status': 'completed',
                     'tg_file_id': file_id,
@@ -179,13 +183,11 @@ def start_bot():
             except Exception as err:
                 print(f"❌ Processing failed: {err}")
             
-            # --- [Cleanup Section] အလုပ်ပြီးတာနဲ့ ဖိုင်အားလုံးကို ပြန်ဖျက်ခြင်း ---
             print("🧹 Cleaning up temporary files...")
             if os.path.exists(part_file): os.remove(part_file)
             if os.path.exists("final.mp4"): os.remove("final.mp4")
             if os.path.exists("auth.txt"): os.remove("auth.txt")
 
-        # Task တစ်ခုလုံး ပြီး/မပြီး စစ်ဆေးခြင်း
         remain = list(parts_ref.where('status', '==', 'pending').stream())
         if len(remain) == 0:
             task_doc.reference.update({'status': 'completed'})
