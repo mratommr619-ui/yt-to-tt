@@ -8,7 +8,7 @@ from firebase_admin import credentials, firestore
 import yt_dlp
 
 START_TIME = time.time()
-TIMEOUT_SECONDS = 330 * 60 # ၅ နာရီခွဲ (၁၉၈၀၀ စက္ကန့်)
+TIMEOUT_SECONDS = 330 * 60 
 
 # --- [၁] Firebase Setup ---
 try:
@@ -16,34 +16,66 @@ try:
     cred = credentials.Certificate(cert_dict)
     firebase_admin.initialize_app(cred)
     db = firestore.client()
-except:
-    exit(1)
+except: exit(1)
 
 # --- [၂] GitHub ကို ပြန်နှိုးမည့် Function ---
 def restart_workflow():
     token = os.environ.get('GH_TOKEN')
-    repo = "mratommr619-ui/yt-to-tt" # မိတ်ဆွေရဲ့ Repo လိပ်စာ
+    repo = "mratommr619-ui/yt-to-tt"
     url = f"https://api.github.com/repos/{repo}/actions/workflows/main.yml/dispatches"
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-    data = {"ref": "main"}
-    requests.post(url, headers=headers, json=data)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    requests.post(url, headers=headers, json={"ref": "main"})
     print("🚀 Sent restart signal to GitHub Actions!")
 
+# --- [၃] Fast Forward Telegram Sender ---
 def send_to_telegram(video_path, caption):
     token = os.environ.get('TELEGRAM_TOKEN')
-    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-    url = f"https://api.telegram.org/bot{token}/sendVideo"
+    raw_ids = os.environ.get('TELEGRAM_CHAT_ID', '')
+    chat_ids = [cid.strip() for cid in raw_ids.split(',') if cid.strip()]
+    
+    if not chat_ids: return False
+
+    # ၁။ ပထမဆုံး ID ဆီကို ဗီဒီယို အရင် Upload တင်မယ်
+    first_id = chat_ids[0]
+    upload_url = f"https://api.telegram.org/bot{token}/sendVideo"
+    file_id = None
+    
     try:
+        print(f"📤 Uploading original video to: {first_id}...")
         with open(video_path, 'rb') as video_file:
             files = {'video': video_file}
-            data = {'chat_id': chat_id, 'caption': caption}
-            requests.post(url, data=data, files=files)
-            return True
-    except: return False
+            data = {'chat_id': first_id, 'caption': caption}
+            res = requests.post(upload_url, data=data, files=files).json()
+            if res.get('ok'):
+                # တင်ပြီးသွားရင် Telegram က ပေးတဲ့ file_id ကို မှတ်ထားမယ်
+                file_id = res['result']['video']['file_id']
+                print(f"✅ Uploaded! File ID: {file_id}")
+            else:
+                print(f"❌ Upload failed: {res}")
+                return False
+    except Exception as e:
+        print(f"❌ Upload Error: {e}")
+        return False
 
+    # ၂။ ကျန်တဲ့ ID တွေဆီကို Forward (copyMessage) လုပ်မယ် (ဒါက အရမ်းမြန်တယ်)
+    if file_id and len(chat_ids) > 1:
+        forward_url = f"https://api.telegram.org/bot{token}/copyMessage"
+        for cid in chat_ids[1:]:
+            try:
+                print(f"➡️ Fast Forwarding to: {cid}...")
+                # copyMessage က Forward စာတန်း မပါဘဲ အသစ်တင်သလို ပို့ပေးတာပါ
+                f_data = {
+                    'chat_id': cid, 
+                    'from_chat_id': first_id, 
+                    'message_id': res['result']['message_id']
+                }
+                requests.post(forward_url, data=f_data)
+            except Exception as e:
+                print(f"⚠️ Forward error for {cid}: {e}")
+                
+    return True
+
+# --- [၄] Universal Downloader ---
 def download_universal_video(video_url):
     ydl_opts = {'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 'outtmpl': 'movie.mp4', 'noplaylist': True, 'quiet': True}
     try:
@@ -51,10 +83,10 @@ def download_universal_video(video_url):
         return True
     except: return False
 
+# --- [၅] Main Process ---
 def start_bot():
     tasks_ref = db.collection('tasks')
     while True:
-        # အချိန်စစ်မယ် - ၅ နာရီခွဲပြည့်ရင် GitHub ကို နှိုးပြီး ပိတ်မယ်
         if (time.time() - START_TIME) > TIMEOUT_SECONDS:
             restart_workflow()
             break 
@@ -93,7 +125,9 @@ def start_bot():
                 part_lb = f"drawtext=text='{label}':fontcolor=white:fontsize=80:borderw=4:bordercolor=red:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,3)'"
                 
                 subprocess.run(f'ffmpeg -y -i "{part_file}" -vf "{moving_wm},{movie_lb},{part_lb}" "final.mp4"', shell=True, check=True)
-                if send_to_telegram("final.mp4", f"{movie_name} - {label} {hashtags} @juneking619"):
+                
+                caption = f"{movie_name} - {label} {hashtags} @juneking619"
+                if send_to_telegram("final.mp4", caption):
                     task_doc.reference.collection('parts').document(f'p{i}').update({'status': 'completed'})
 
                 if os.path.exists(part_file): os.remove(part_file)
