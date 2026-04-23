@@ -120,6 +120,9 @@ def start_bot():
     movie_name = data.get('movieName', '')
     hashtags = data.get('hashtags', '#fyp #movie')
     
+    # [အရေးကြီးပြင်ဆင်ချက်] ဇာတ်လမ်းနာမည်ထဲတွင် ပါသော (') အစက်လေးများကြောင့် FFmpeg Error မတက်စေရန်
+    safe_movie_name = movie_name.replace("'", "’").replace('"', '”')
+    
     parts_ref = task_doc.reference.collection('parts')
     pending_parts = list(parts_ref.where('status', '==', 'pending').order_by('fileIndex').limit(1).stream())
 
@@ -140,11 +143,13 @@ def start_bot():
                     "y='if(lt(mod(t,14),7),10+(h-text_h-20)*(mod(t,7)/7),h-text_h-10-(h-text_h-20)*(mod(t,7)/7))'"
                 )
 
-                movie_label = f"drawtext=text='{movie_name}':fontcolor=white@0.7:fontsize=40:x=(w-text_w)/2:y=h-80"
+                # safe_movie_name ကို အသုံးပြုထားပါသည်
+                movie_label = f"drawtext=text='{safe_movie_name}':fontcolor=white@0.7:fontsize=40:x=(w-text_w)/2:y=h-80"
                 part_label = f"drawtext=text='{label}':fontcolor=white:fontsize=80:borderw=4:bordercolor=red:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,3)'"
                 
                 subprocess.run(f'ffmpeg -y -i "{part_file}" -vf "{moving_watermark},{movie_label},{part_label}" "final.mp4"', shell=True, check=True)
 
+                # Caption အတွက် မူရင်းနာမည်ကို ပြန်သုံးထားပါသည်
                 caption = f"{movie_name} - {label} {hashtags} @juneking619"
                 
                 # Telegram နှင့် TikTok သို့ တင်ခြင်း
