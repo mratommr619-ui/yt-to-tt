@@ -30,8 +30,8 @@ jobs:
       - name: Install Python Packages & Playwright Browser
         run: |
           pip install -r requirements.txt
-          python -m playwright install
-          sudo python -m playwright install-deps
+          # TikTok အတွက် လိုအပ်သော Chromium Browser ကိုသာ တိုက်ရိုက်သွင်းခြင်း
+          playwright install --with-deps chromium
 
       - name: Run Bot
         run: python bot.py
