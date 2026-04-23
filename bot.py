@@ -16,19 +16,17 @@ except Exception as e:
     print(f"❌ Firebase Setup Error: {e}")
     exit(1)
 
-# --- [၂] TikTok Cloud Uploader ---
+# --- [၂] TikTok Cloud Uploader (Using sessionid) ---
 def upload_to_tiktok(video_path, caption):
-    cookies_str = os.environ.get('TIKTOK_COOKIES')
-    if not cookies_str:
-        print("⚠️ No TikTok Cookies found. Skipping TikTok upload.")
+    session_id = os.environ.get('TIKTOK_SESSIONID')
+    if not session_id:
+        print("⚠️ No TIKTOK_SESSIONID found in Secrets. Skipping TikTok upload.")
         return False
         
     try:
         print(f"🚀 Cloud Uploading {video_path} to TikTok...")
-        with open('auth.txt', 'w', encoding='utf-8') as f:
-            f.write(cookies_str)
-        
-        upload_video(video_path, description=caption, cookies='auth.txt')
+        # Cookie အရှည်ကြီးတွေအစား sessionid တစ်ကြောင်းတည်းကို အသုံးပြုခြင်း
+        upload_video(video_path, description=caption, sessionid=session_id)
         print("✅ TikTok Upload Finished!")
         return True
     except Exception as e:
@@ -127,25 +125,23 @@ def start_bot():
 
                 caption = f"{movie_name} - {label} {hashtags} @juneking619"
                 
-                # TikTok သို့ တိုက်ရိုက်တင်ခြင်း (Telegram မပါတော့ပါ)
-                upload_to_tiktok("final.mp4", caption)
-                
-                part_doc.reference.update({ 
-                    'status': 'completed',
-                    'caption': caption,
-                    'readyAt': firestore.SERVER_TIMESTAMP
-                })
-                print(f"✅ {label} finished and uploaded!")
+                # TikTok တင်ခြင်း အောင်မြင်မှသာ Completed ပြမည်
+                if upload_to_tiktok("final.mp4", caption):
+                    part_doc.reference.update({ 
+                        'status': 'completed',
+                        'caption': caption,
+                        'readyAt': firestore.SERVER_TIMESTAMP
+                    })
+                    print(f"✅ {label} finished and uploaded to TikTok!")
+                else:
+                    print(f"❌ {label} failed to upload. Will retry next time.")
                 
             except Exception as err:
                 print(f"❌ Processing failed: {err}")
             
-            # Temporary files များကို ပြန်ဖျက်ခြင်း
             if os.path.exists(part_file): os.remove(part_file)
             if os.path.exists("final.mp4"): os.remove("final.mp4")
-            if os.path.exists("auth.txt"): os.remove("auth.txt")
 
-        # အပိုင်းများအားလုံး ပြီးဆုံးပါက Task ကို Completed ပြောင်းခြင်း
         remain = list(parts_ref.where('status', '==', 'pending').stream())
         if len(remain) == 0:
             task_doc.reference.update({'status': 'completed'})
