@@ -1,4 +1,4 @@
-name: Video Splitter and TikTok Uploader
+name: YouTube to TikTok Bot (OAuth2 Mode)
 
 on:
   schedule:
@@ -20,10 +20,20 @@ jobs:
       - name: Install System Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg chromium-browser
+          sudo apt-get install -y ffmpeg chromium-browser python3-pip
+          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
+          sudo /usr/local/bin/yt-dlp -U
 
       - name: Install Dependencies
         run: npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin
+
+      # 🔥 Cache စနစ် - ဒါက Login ဝင်ထားတာကို မှတ်ထားပေးမှာပါ
+      - name: Cache YouTube Auth
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/yt-dlp
+          key: ${{ runner.os }}-yt-dlp-auth
 
       - name: Run Bot
         env:
