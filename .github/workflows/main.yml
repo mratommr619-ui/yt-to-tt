@@ -2,6 +2,8 @@ name: Telegram Continuous Auto-Queue Bot
 
 on:
   workflow_dispatch:
+  repository_dispatch: # Bot က ပြန်နှိုးလျှင် လက်ခံရန်
+    types: [restart_bot]
 
 jobs:
   build:
@@ -10,23 +12,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install System Dependencies (FFmpeg)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
-      - name: Install Python Packages
-        run: |
-          pip install -r requirements.txt
-
       - name: Run Bot
         run: python bot.py
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }} # ပြန်နှိုးရန် လိုအပ်သည်
