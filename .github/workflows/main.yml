@@ -17,21 +17,14 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-
-      - name: Install System Dependencies (FFmpeg & Node.js)
+      - name: Install System Dependencies (FFmpeg)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg nodejs
+          sudo apt-get install -y ffmpeg
 
       - name: Install Python Packages
         run: |
-          pip install firebase-admin requests tiktok-uploader
-          # YouTube Block များကို ကျော်ရန် yt-dlp ၏ နောက်ဆုံးထွက် Master Code ကို သွင်းခြင်း
-          pip install -U https://github.com/yt-dlp/yt-dlp/archive/master.zip
+          pip install -r requirements.txt
 
       - name: Run Bot
         run: python bot.py
