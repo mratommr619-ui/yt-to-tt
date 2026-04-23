@@ -22,7 +22,6 @@ jobs:
         with:
           node-version: '20'
 
-      # Monitor အတု (xvfb) ကို ထပ်ပေါင်းထည့်လိုက်ပါပြီ
       - name: Install System Dependencies (FFmpeg & Xvfb)
         run: |
           sudo apt-get update
@@ -33,9 +32,8 @@ jobs:
           pip install -r requirements.txt
           playwright install --with-deps chromium
 
-      # xvfb-run ဖြင့် Monitor အတုထဲတွင် python bot.py ကို Run မည်
       - name: Run Bot
         run: xvfb-run --auto-servernum python bot.py
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
+          TIKTOK_SESSIONID: ${{ secrets.TIKTOK_SESSIONID }}
