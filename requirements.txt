@@ -1,0 +1,4 @@
+firebase-admin
+requests
+yt-dlp
+tiktok-uploader
