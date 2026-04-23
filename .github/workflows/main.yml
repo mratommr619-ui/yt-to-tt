@@ -17,20 +17,21 @@ jobs:
         with:
           python-version: '3.10'
 
-      # yt-dlp ၏ JS Runtime Error ရှင်းရန် Node.js ထည့်ခြင်း
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
 
-      - name: Install System Dependencies (FFmpeg)
+      - name: Install System Dependencies (FFmpeg & Node.js)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg nodejs
 
       - name: Install Python Packages
         run: |
-          pip install -r requirements.txt
+          pip install firebase-admin requests tiktok-uploader
+          # YouTube Block များကို ကျော်ရန် yt-dlp ၏ နောက်ဆုံးထွက် Master Code ကို သွင်းခြင်း
+          pip install -U https://github.com/yt-dlp/yt-dlp/archive/master.zip
 
       - name: Run Bot
         run: python bot.py
@@ -39,4 +40,3 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
-          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
