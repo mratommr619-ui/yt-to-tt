@@ -5,7 +5,7 @@ import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
 from tiktok_uploader.upload import upload_video
-from pytubefix import YouTube
+import yt_dlp
 
 # --- [၁] Firebase Setup ---
 try:
@@ -56,26 +56,23 @@ def upload_to_tiktok(video_path, caption):
         print(f"❌ TikTok Upload Error: {e}")
         return False
 
-# --- [၄] PyTubeFix Downloader (No external APIs, bypassing via Android Client) ---
-def download_youtube_video(video_url):
-    print("📥 Downloading via PyTubeFix (Android Client)...")
+# --- [၄] Universal Video Downloader (Facebook, TikTok, Drive, Dropbox, etc.) ---
+def download_universal_video(video_url):
+    print(f"📥 Downloading video from: {video_url}")
+    ydl_opts = {
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'outtmpl': 'movie.mp4',
+        'noplaylist': True,
+        'geo_bypass': True,
+        'quiet': False
+    }
     try:
-        # YouTube Android App အနေဖြင့် ဝင်ရောက်ခြင်း
-        yt = YouTube(video_url, client='ANDROID')
-        
-        # MP4 Format နှင့် Resolution အကောင်းဆုံးကို ရွေးချယ်ခြင်း
-        stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-        
-        if not stream:
-            print("❌ No valid MP4 stream found!")
-            return False
-            
-        print(f"📥 Found stream ({stream.resolution}). Downloading...")
-        stream.download(filename="movie.mp4")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
         print("✅ Video Downloaded Successfully!")
         return True
     except Exception as e:
-        print(f"❌ PyTubeFix Download Error: {e}")
+        print(f"❌ Universal Download Error: {e}")
         return False
 
 # --- [၅] Main Process ---
@@ -88,7 +85,8 @@ def start_bot():
         task_doc = pending_query[0]
         video_url = task_doc.to_dict().get('videoUrl')
         try:
-            if not download_youtube_video(video_url):
+            # Universal Downloader ကို ခေါ်သုံးခြင်း
+            if not download_universal_video(video_url):
                 task_doc.reference.update({'status': 'error'})
                 return
             
@@ -149,6 +147,7 @@ def start_bot():
 
                 caption = f"{movie_name} - {label} {hashtags} @juneking619"
                 
+                # Telegram နှင့် TikTok သို့ တင်ခြင်း
                 file_id = send_to_telegram("final.mp4", caption)
                 upload_to_tiktok("final.mp4", caption)
                 
@@ -163,10 +162,12 @@ def start_bot():
             except Exception as err:
                 print(f"❌ Processing failed: {err}")
             
+            # Temporary files များကို ပြန်ဖျက်ခြင်း
             if os.path.exists(part_file): os.remove(part_file)
             if os.path.exists("final.mp4"): os.remove("final.mp4")
             if os.path.exists("auth.txt"): os.remove("auth.txt")
 
+        # အပိုင်းများအားလုံး ပြီးဆုံးပါက Task ကို Completed ပြောင်းခြင်း
         remain = list(parts_ref.where('status', '==', 'pending').stream())
         if len(remain) == 0:
             task_doc.reference.update({'status': 'completed'})
