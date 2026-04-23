@@ -16,25 +16,29 @@ except Exception as e:
     print(f"❌ Firebase Setup Error: {e}")
     exit(1)
 
-# --- [၂] TikTok Cloud Uploader (Session ID Bug Fix) ---
+# --- [၂] TikTok Cloud Uploader (Username & Password Method) ---
 def upload_to_tiktok(video_path, caption):
-    session_id = os.environ.get('TIKTOK_SESSIONID')
-    if not session_id:
-        print("⚠️ No TIKTOK_SESSIONID found in Secrets.")
+    tiktok_user = os.environ.get('TIKTOK_USERNAME')
+    tiktok_pass = os.environ.get('TIKTOK_PASSWORD')
+    
+    if not tiktok_user or not tiktok_pass:
+        print("⚠️ No TikTok Username/Password found in Secrets. Skipping upload.")
         return False
         
     try:
-        print(f"🚀 Cloud Uploading {video_path} to TikTok...")
+        print(f"🚀 Cloud Uploading {video_path} to TikTok as '{tiktok_user}'...")
         
-        # [အရေးကြီးပြင်ဆင်ချက်] Library ၏ Bug ကို ကျော်ရန်
-        # Session ID ကို TikTok Domain ဖြင့် အတင်းချိတ်ဆက်၍ Cookie ဖိုင်ဖန်တီးခြင်း
-        cookie_content = f".tiktok.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t{session_id}\n"
-        with open('auth.txt', 'w', encoding='utf-8') as f:
-            f.write(cookie_content)
+        # Cookie အစား Username/Password ဖြင့် Login ဝင်၍ တင်ခြင်း
+        # headless=True ကိုထားခြင်းဖြင့် နောက်ကွယ်တွင် Browser ဖွင့်၍ တင်မည်
+        upload_video(
+            video_path, 
+            description=caption, 
+            username=tiktok_user, 
+            password=tiktok_pass,
+            headless=True
+        )
         
-        # sessionid အစား ဖန်တီးထားသော auth.txt ဖိုင်ကို အသုံးပြု၍ တင်ခြင်း
-        upload_video(video_path, description=caption, cookies='auth.txt')
-        print("✅ TikTok Upload Finished!")
+        print("✅ TikTok Upload Successfully Finished!")
         return True
     except Exception as e:
         print(f"❌ TikTok Upload Error: {e}")
@@ -132,8 +136,10 @@ def start_bot():
 
                 caption = f"{movie_name} - {label} {hashtags} @juneking619"
                 
-                # TikTok တင်ခြင်း အောင်မြင်မှသာ Completed ပြမည်
-                if upload_to_tiktok("final.mp4", caption):
+                # TikTok တင်ခြင်း (အောင်မြင်မှသာ Completed ပြမည်)
+                upload_success = upload_to_tiktok("final.mp4", caption)
+                
+                if upload_success:
                     part_doc.reference.update({ 
                         'status': 'completed',
                         'caption': caption,
