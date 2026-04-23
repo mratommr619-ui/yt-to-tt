@@ -1,4 +1,4 @@
 firebase-admin
 requests
 tiktok-uploader
-pytubefix
+yt-dlp
