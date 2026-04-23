@@ -15,59 +15,59 @@ try {
 }
 const db = admin.firestore();
 
-// 🔥 Universal Downloader (Bypass Strategy)
+// 🔥 Universal Downloader (With Drive Bypass)
 function downloadVideo(url, output) {
     console.log(`📥 Downloading from: ${url}`);
     
-    // Google Drive Link ကို Direct Link အဖြစ် အလိုအလျောက် ပြောင်းခြင်း
     let finalUrl = url;
     if (url.includes('drive.google.com')) {
         const fileId = url.split('/d/')[1]?.split('/')[0] || url.split('id=')[1]?.split('&')[0];
         if (fileId) {
-            finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-            console.log(`🔄 Drive Direct Link converted: ${finalUrl}`);
+            // &confirm=t က Google ရဲ့ Virus Warning ကို ကျော်ဖို့ဖြစ်ပါတယ်
+            finalUrl = `https://drive.google.com/uc?export=download&confirm=t&id=${fileId}`;
+            console.log(`🔄 Drive Direct Link (Bypass): ${finalUrl}`);
         }
     }
 
     try {
-        // Strategy 1: CURL နဲ့ တိုက်ရိုက်ဆွဲခြင်း (Direct Links & Drive)
-        console.log("Strategy 1: Attempting direct CURL download...");
-        execSync(`curl -L "${finalUrl}" -o "temp_raw.mp4" --user-agent "Mozilla/5.0" --max-time 300`, { stdio: 'inherit' });
-        
-        if (fs.existsSync('temp_raw.mp4') && fs.statSync('temp_raw.mp4').size > 100000) { // အနည်းဆုံး 100KB ရှိမှ
-            console.log("✅ Strategy 1 Success!");
-        } else {
-            throw new Error("File too small, trying next strategy.");
-        }
+        // Strategy 1: yt-dlp နဲ့ အရင်စမ်းမယ်
+        console.log("Strategy 1: Trying yt-dlp...");
+        execSync(`yt-dlp --no-check-certificate --user-agent "Mozilla/5.0" "${url}" -o "temp_raw.mp4"`, { stdio: 'inherit' });
     } catch (e) {
         try {
-            // Strategy 2: yt-dlp နဲ့ ဒေါင်းခြင်း (Facebook, TikTok, Others)
-            console.log("Strategy 2: Attempting yt-dlp download...");
-            execSync(`yt-dlp --no-check-certificate --user-agent "Mozilla/5.0" "${url}" -o "temp_raw.mp4" --no-warnings`, { stdio: 'inherit' });
+            // Strategy 2: CURL နဲ့ အတင်းဆွဲချမယ် (Drive အတွက် ပိုထိရောက်တယ်)
+            console.log("Strategy 2: Trying CURL forced download...");
+            execSync(`curl -L "${finalUrl}" -o "temp_raw.mp4" --user-agent "Mozilla/5.0"`, { stdio: 'inherit' });
         } catch (e2) {
-            // Strategy 3: YouTube Proxy Bypass (YouTube links only)
-            if (url.includes('youtube.com') || url.includes('youtu.be')) {
-                console.log("Strategy 3: Attempting YouTube Proxy Bypass...");
+            // Strategy 3: YouTube Proxy (YouTube link ဖြစ်နေခဲ့ရင်)
+            if (url.includes('youtube') || url.includes('youtu.be')) {
                 const videoId = url.split('v=')[1]?.split('&')[0] || url.split('/').pop().split('?')[0];
                 const proxyUrl = `https://yewtu.be/latest_version?id=${videoId}&itag=22`;
                 execSync(`curl -L "${proxyUrl}" -o "temp_raw.mp4" --user-agent "Mozilla/5.0"`, { stdio: 'inherit' });
             } else {
-                throw new Error("All download strategies failed.");
+                throw new Error("All download methods failed.");
             }
         }
     }
 
     if (fs.existsSync('temp_raw.mp4')) {
-        console.log("⚙️ Re-encoding video for TikTok compatibility...");
+        const stats = fs.statSync('temp_raw.mp4');
+        console.log(`📊 Downloaded Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+        
+        if (stats.size < 100000) { // 100KB အောက်ဆိုရင် Error ပြမယ်
+            throw new Error("❌ Downloaded file is too small. It's not a video!");
+        }
+
+        console.log("⚙️ Re-encoding for TikTok...");
         execSync(`ffmpeg -y -i temp_raw.mp4 -c:v libx264 -preset ultrafast -crf 28 -c:a aac "${output}"`);
     } else {
-        throw new Error("Download failed - No file generated.");
+        throw new Error("No file found.");
     }
 }
 
 // TikTok Upload Part
 async function uploadToTikTok(videoPath, caption) {
-    console.log("📤 Uploading to TikTok...");
+    console.log("📤 TikTok တင်နေပါသည်...");
     const browser = await puppeteer.launch({
         headless: true,
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -109,7 +109,7 @@ async function startBot() {
         const { videoUrl } = taskDoc.data();
         try {
             downloadVideo(videoUrl, "raw.mp4");
-            console.log("✂️ Splitting into 5-min parts...");
+            console.log("✂️ Splitting into parts...");
             execSync(`ffmpeg -i "raw.mp4" -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"`);
             
             const files = fs.readdirSync('.').filter(f => f.startsWith('part_') && f.endsWith('.mp4'));
@@ -124,7 +124,6 @@ async function startBot() {
             return;
         }
     } else {
-        // Continue processing existing task
         const procSnap = await db.collection('tasks').where('status', '==', 'processing').limit(1).get();
         if (procSnap.empty) return console.log("💤 No tasks.");
         taskDoc = procSnap.docs[0];
