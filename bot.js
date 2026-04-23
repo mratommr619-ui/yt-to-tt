@@ -15,7 +15,7 @@ try {
 }
 const db = admin.firestore();
 
-// TikTok Upload Logic
+// TikTok Upload
 async function uploadToTikTok(videoPath, caption) {
     const browser = await puppeteer.launch({
         headless: true,
@@ -43,18 +43,24 @@ async function uploadToTikTok(videoPath, caption) {
     }
 }
 
-// 🔥 YouTube OAuth2 Strategy
+// 🔥 Universal Downloader
 function downloadVideo(url, output) {
-    console.log("📥 YouTube OAuth2 (Device Code) စနစ်ဖြင့် ဒေါင်းနေပါသည်...");
+    console.log(`📥 Downloading from: ${url}`);
     try {
-        // --username oauth2 ကိုသုံးပြီး TV mode နဲ့ login ဝင်ခိုင်းတာပါ
-        execSync(`yt-dlp --username oauth2 --password "" "${url}" -o "temp_vid" --no-check-certificate`);
+        let command;
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            console.log("📺 YouTube detected. Using OAuth2 Mode...");
+            command = `yt-dlp --username oauth2 --password "" "${url}" -o "temp_raw" --no-check-certificate`;
+        } else {
+            console.log("🌐 Generic site detected. Using Standard Bypass...");
+            command = `yt-dlp "${url}" -o "temp_raw" --no-check-certificate --user-agent "Mozilla/5.0"`;
+        }
         
-        const downloadedFile = fs.readdirSync('.').find(f => f.startsWith('temp_vid'));
+        execSync(command, { stdio: 'inherit' });
+        const downloadedFile = fs.readdirSync('.').find(f => f.startsWith('temp_raw'));
         execSync(`ffmpeg -y -i ${downloadedFile} -c:v libx264 -preset fast -crf 28 -c:a aac "${output}"`);
     } catch (e) {
-        console.error("❌ OAuth2 Error/Login Required");
-        throw e;
+        throw new Error("Download failed. Link may be private or restricted.");
     }
 }
 
@@ -62,7 +68,7 @@ async function startBot() {
     let taskSnap = await db.collection('tasks').where('status', '==', 'processing').limit(1).get();
     if (taskSnap.empty) {
         taskSnap = await db.collection('tasks').where('status', '==', 'pending').limit(1).get();
-        if (taskSnap.empty) return console.log("💤 တင်စရာ မရှိသေးပါ။");
+        if (taskSnap.empty) return console.log("💤 No tasks found.");
         const taskDoc = taskSnap.docs[0];
         const { videoUrl } = taskDoc.data();
         try {
@@ -74,7 +80,10 @@ async function startBot() {
                 await taskDoc.ref.collection('parts').doc(`p${i}`).set({ fileIndex: i, label: label, status: 'pending' });
             }
             await taskDoc.ref.update({ status: 'processing' });
-        } catch (e) { return; }
+        } catch (e) { 
+            await taskDoc.ref.update({ status: 'error' });
+            return; 
+        }
     }
     const taskDoc = taskSnap.docs[0];
     const { movieName } = taskDoc.data();
