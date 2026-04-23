@@ -1,8 +1,8 @@
-name: YouTube to TikTok Bot (OAuth2 Mode)
+name: Universal Video Bot (Drive & Link Mode)
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # ၃၀ မိနစ်တစ်ခါ Run မည်
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -27,13 +27,6 @@ jobs:
 
       - name: Install Dependencies
         run: npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer firebase-admin
-
-      # 🔥 Cache စနစ် - ဒါက Login ဝင်ထားတာကို မှတ်ထားပေးမှာပါ
-      - name: Cache YouTube Auth
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/yt-dlp
-          key: ${{ runner.os }}-yt-dlp-auth
 
       - name: Run Bot
         env:
