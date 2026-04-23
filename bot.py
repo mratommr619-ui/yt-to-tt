@@ -5,7 +5,6 @@ import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
 from tiktok_uploader.upload import upload_video
-import yt_dlp
 
 # --- [၁] Firebase Setup ---
 try:
@@ -49,7 +48,6 @@ def upload_to_tiktok(video_path, caption):
         with open('auth.txt', 'w', encoding='utf-8') as f:
             f.write(cookies_str)
         
-        # TikTok Library ကိုသုံးပြီး တင်ခြင်း
         upload_video(video_path, description=caption, cookies='auth.txt')
         print("✅ TikTok Upload Finished!")
         return True
@@ -57,37 +55,49 @@ def upload_to_tiktok(video_path, caption):
         print(f"❌ TikTok Upload Error: {e}")
         return False
 
-# --- [၄] YouTube Downloader (Pro Cloud Method - No Cookies Needed) ---
+# --- [၄] API Downloader (No yt-dlp, No Cookies needed) ---
 def download_youtube_video(video_url):
-    print("📥 Downloading YouTube video...")
-    ydl_opts = {
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'outtmpl': 'movie.mp4',
-        'noplaylist': True,
-        # YouTube Android App ကဲ့သို့ လှည့်စား၍ ဒေါင်းခြင်း
-        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web']}},
-        'sleep_interval_requests': 1,
-        'sleep_interval': 2,
-        'max_sleep_interval': 5,
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36',
-        },
-        'geo_bypass': True,
+    print("📥 Bypassing yt-dlp using Cobalt API...")
+    api_url = "https://api.cobalt.tools/api/json"
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Origin": "https://cobalt.tools",
+        "Referer": "https://cobalt.tools/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    data = {
+        "url": video_url,
+        "vQuality": "720", 
+        "isAudioOnly": False
     }
     
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
+        res = requests.post(api_url, json=data, headers=headers)
+        result = res.json()
+        
+        if "url" not in result:
+            print(f"❌ API Error: {result}")
+            return False
+            
+        download_url = result["url"]
+        print("📥 Direct Link Found! Downloading MP4...")
+        
+        video_data = requests.get(download_url, stream=True)
+        with open("movie.mp4", 'wb') as f:
+            for chunk in video_data.iter_content(chunk_size=1024*1024):
+                if chunk:
+                    f.write(chunk)
+                    
+        print("✅ Video Downloaded Successfully!")
         return True
     except Exception as e:
-        print(f"❌ YouTube Download Error: {e}")
+        print(f"❌ Download Error: {e}")
         return False
 
 # --- [၅] Main Process ---
 def start_bot():
     tasks_ref = db.collection('tasks')
-    
-    # Task အသစ် ရှိ/မရှိ စစ်ဆေးခြင်း
     pending_query = list(tasks_ref.where('status', '==', 'pending').order_by('createdAt').limit(1).stream())
     
     task_doc = None
@@ -119,7 +129,6 @@ def start_bot():
             task_doc.reference.update({'status': 'error'})
             return
     else:
-        # Processing အဆင့်မှ အပိုင်းများကို ဆက်လုပ်ခြင်း
         proc_query = list(tasks_ref.where('status', '==', 'processing').order_by('createdAt').limit(1).stream())
         if not proc_query:
             print("💤 No tasks to do.")
@@ -144,24 +153,19 @@ def start_bot():
             try:
                 print(f"🎬 Processing {label} with Moving Watermark...")
                 
-                # ၁။ Moving Watermark (@juneking619)
                 moving_watermark = (
                     "drawtext=text='@juneking619':fontcolor=white@0.4:fontsize=35:"
                     "x='if(lt(mod(t,20),10),10+(w-text_w-20)*(mod(t,10)/10),w-text_w-10-(w-text_w-20)*(mod(t,10)/10))':"
                     "y='if(lt(mod(t,14),7),10+(h-text_h-20)*(mod(t,7)/7),h-text_h-10-(h-text_h-20)*(mod(t,7)/7))'"
                 )
 
-                # ၂။ Movie Name Label
                 movie_label = f"drawtext=text='{movie_name}':fontcolor=white@0.7:fontsize=40:x=(w-text_w)/2:y=h-80"
-                
-                # ၃။ Part Label (၃ စက္ကန့်သာ ပေါ်မည်)
                 part_label = f"drawtext=text='{label}':fontcolor=white:fontsize=80:borderw=4:bordercolor=red:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,3)'"
                 
                 subprocess.run(f'ffmpeg -y -i "{part_file}" -vf "{moving_watermark},{movie_label},{part_label}" "final.mp4"', shell=True, check=True)
 
                 caption = f"{movie_name} - {label} {hashtags} @juneking619"
                 
-                # Telegram နှင့် TikTok သို့ ပို့ခြင်း
                 file_id = send_to_telegram("final.mp4", caption)
                 upload_to_tiktok("final.mp4", caption)
                 
@@ -176,12 +180,10 @@ def start_bot():
             except Exception as err:
                 print(f"❌ Processing failed: {err}")
             
-            # ဖိုင်များကို ပြန်ဖျက်ခြင်း (Cleanup)
             if os.path.exists(part_file): os.remove(part_file)
             if os.path.exists("final.mp4"): os.remove("final.mp4")
             if os.path.exists("auth.txt"): os.remove("auth.txt")
 
-        # Task ပြီးဆုံးမှု ရှိ/မရှိ စစ်ဆေးခြင်း
         remain = list(parts_ref.where('status', '==', 'pending').stream())
         if len(remain) == 0:
             task_doc.reference.update({'status': 'completed'})
