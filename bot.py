@@ -30,7 +30,6 @@ def send_to_telegram(video_path, caption):
             files = {'video': video_file}
             data = {'chat_id': chat_id, 'caption': caption}
             response = requests.post(url, data=data, files=files)
-            
             if response.status_code == 200:
                 return response.json()['result']['video']['file_id']
             else:
@@ -59,20 +58,18 @@ def upload_to_tiktok(video_path, caption):
         print(f"❌ TikTok Upload Error: {e}")
         return False
 
-# --- [၄] YouTube Downloader (Anti-Ban စနစ်ပါဝင်သည်) ---
+# --- [၄] YouTube Downloader (Anti-Ban ပါဝင်သည်) ---
 def download_youtube_video(video_url):
     print("📥 Downloading YouTube video...")
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'outtmpl': 'movie.mp4',
         'noplaylist': True,
-        # YouTube က Bot မှန်း မသိအောင် ကာကွယ်သည့်စနစ်များ
         'sleep_interval_requests': 1,
         'sleep_interval': 2,
         'max_sleep_interval': 5,
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
         },
         'geo_bypass': True,
     }
@@ -88,7 +85,7 @@ def download_youtube_video(video_url):
 def start_bot():
     tasks_ref = db.collection('tasks')
     
-    # Task အသစ် (Pending) ရှိမရှိ အရင်စစ်မယ်
+    # Task အသစ် စစ်ဆေးခြင်း
     pending_query = list(tasks_ref.where('status', '==', 'pending').order_by('createdAt').limit(1).stream())
     
     task_doc = None
@@ -96,7 +93,6 @@ def start_bot():
         task_doc = pending_query[0]
         video_url = task_doc.to_dict().get('videoUrl')
         try:
-            # YouTube ကနေ Down မယ်
             if not download_youtube_video(video_url):
                 task_doc.reference.update({'status': 'error'})
                 return
@@ -104,9 +100,8 @@ def start_bot():
             print("✂️ Splitting video into 5-minute parts...")
             subprocess.run('ffmpeg -i "movie.mp4" -c copy -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"', shell=True, check=True)
             
-            # File တွေကို ရှာပြီး Database ထဲထည့်မယ်
             files = [f for f in os.listdir('.') if f.startswith('part_') and f.endswith('.mp4')]
-            files.sort(key=lambda x: int(x.split('_')[1].split('.')[0])) # မှန်ကန်အောင် စီခြင်း
+            files.sort(key=lambda x: int(x.split('_')[1].split('.')[0]))
             
             for i, f in enumerate(files):
                 label = "End Part" if i == len(files) - 1 else f"Part - {i+1}"
@@ -115,6 +110,7 @@ def start_bot():
                 })
             
             task_doc.reference.update({'status': 'processing'})
+            # မူရင်းဖိုင်ကြီးကို ဖျက်ခြင်း
             if os.path.exists("movie.mp4"): os.remove("movie.mp4")
             
         except Exception as e:
@@ -122,7 +118,6 @@ def start_bot():
             task_doc.reference.update({'status': 'error'})
             return
     else:
-        # Processing ဖြစ်နေတဲ့ Task ထဲက အပိုင်းတွေကို ဆက်လုပ်မယ်
         proc_query = list(tasks_ref.where('status', '==', 'processing').order_by('createdAt').limit(1).stream())
         if not proc_query:
             print("💤 No tasks to do.")
@@ -145,43 +140,56 @@ def start_bot():
 
         if os.path.exists(part_file):
             try:
-                print(f"🎬 Processing {label}...")
+                print(f"🎬 Processing {label} with Moving Watermark...")
+                
+                # ၁။ @juneking619 စာသားကို ဗီဒီယိုအနှံ့ ပတ်ပြေးနေအောင်လုပ်ခြင်း (Moving Watermark)
+                # Logic: x နေရာကို စက္ကန့်အလိုက် ပြောင်းမယ်၊ y နေရာကိုလည်း ပြောင်းမယ်
+                moving_watermark = (
+                    "drawtext=text='@juneking619':fontcolor=white@0.4:fontsize=35:"
+                    "x='if(lt(mod(t,20),10),10+(w-text_w-20)*(mod(t,10)/10),w-text_w-10-(w-text_w-20)*(mod(t,10)/10))':"
+                    "y='if(lt(mod(t,14),7),10+(h-text_h-20)*(mod(t,7)/7),h-text_h-10-(h-text_h-20)*(mod(t,7)/7))'"
+                )
+
+                # ၂။ Movie Name (အောက်ခြေအလယ်တွင် ငြိမ်နေမည်)
                 movie_label = f"drawtext=text='{movie_name}':fontcolor=white@0.7:fontsize=40:x=(w-text_w)/2:y=h-80"
+                
+                # ၃။ Part Label (အလယ်တွင် ၃ စက္ကန့်သာ ပေါ်မည်)
                 part_label = f"drawtext=text='{label}':fontcolor=white:fontsize=80:borderw=4:bordercolor=red:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,3)'"
                 
-                # စာသားထည့်ခြင်း
-                subprocess.run(f'ffmpeg -y -i "{part_file}" -vf "{part_label},{movie_label}" "final.mp4"', shell=True, check=True)
+                # FFmpeg ဖြင့် ဗီဒီယိုထုတ်လုပ်ခြင်း
+                subprocess.run(f'ffmpeg -y -i "{part_file}" -vf "{moving_watermark},{movie_label},{part_label}" "final.mp4"', shell=True, check=True)
 
                 caption = f"{movie_name} - {label} {hashtags} @juneking619"
                 
-                # ၁။ Telegram ပို့ခြင်း (Backup ရယူရန်)
+                # Telegram ပို့ခြင်း
                 file_id = send_to_telegram("final.mp4", caption)
                 
-                # ၂။ TikTok သို့ တိုက်ရိုက်တင်ခြင်း
+                # TikTok တင်ခြင်း
                 upload_to_tiktok("final.mp4", caption)
                 
                 # Firestore Update
                 part_doc.reference.update({ 
-                    'status': 'completed', # ဖုန်းနဲ့ မလိုတော့လို့ completed လို့ တန်းပြောင်းလိုက်ပါတယ်
+                    'status': 'completed',
                     'tg_file_id': file_id,
                     'caption': caption,
                     'readyAt': firestore.SERVER_TIMESTAMP
                 })
-                print(f"✅ {label} successfully processed!")
+                print(f"✅ {label} finished and uploaded!")
                 
             except Exception as err:
                 print(f"❌ Processing failed: {err}")
             
-            # ဖိုင်ဟောင်းများကို ရှင်းလင်းခြင်း
+            # --- [Cleanup Section] အလုပ်ပြီးတာနဲ့ ဖိုင်အားလုံးကို ပြန်ဖျက်ခြင်း ---
+            print("🧹 Cleaning up temporary files...")
             if os.path.exists(part_file): os.remove(part_file)
             if os.path.exists("final.mp4"): os.remove("final.mp4")
             if os.path.exists("auth.txt"): os.remove("auth.txt")
 
-        # အပိုင်းအားလုံးပြီးသွားရင် Task ကို Completed ပြောင်းမယ်
+        # Task တစ်ခုလုံး ပြီး/မပြီး စစ်ဆေးခြင်း
         remain = list(parts_ref.where('status', '==', 'pending').stream())
         if len(remain) == 0:
             task_doc.reference.update({'status': 'completed'})
-            print("🏁 All parts sent to Telegram & TikTok.")
+            print("🏁 Task Completed: All parts cleaned and uploaded.")
 
 if __name__ == "__main__":
     start_bot()
