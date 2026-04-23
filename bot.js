@@ -6,16 +6,36 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 puppeteer.use(StealthPlugin());
 
-// Firebase Setup
 try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-} catch (e) {
-    process.exit(1);
-}
+} catch (e) { process.exit(1); }
+
 const db = admin.firestore();
 
-// TikTok Upload
+function downloadVideo(url, output) {
+    console.log(`📥 YouTube Video ကို Cookies သုံးပြီး ဒေါင်းနေပါသည်...`);
+    try {
+        // cookies.txt ကို သေချာဖတ်ပြီး yt-dlp ကို ပေးမယ်
+        // --cookies-from-browser က GitHub မှာ အလုပ်မလုပ်လို့ --cookies နဲ့ပဲ သွားမယ်
+        const command = `yt-dlp --cookies youtube_cookies.txt --no-check-certificate --format "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" "${url}" -o "temp_raw.mp4"`;
+        
+        execSync(command, { stdio: 'inherit' });
+
+        if (fs.existsSync('temp_raw.mp4')) {
+            // ffmpeg နဲ့ ပြန်ပြီး standard ဖြစ်အောင် လုပ်မယ် (ဖြတ်တဲ့အခါ error မတက်အောင်)
+            execSync(`ffmpeg -y -i temp_raw.mp4 -c:v libx264 -preset ultrafast -crf 28 -c:a aac "${output}"`);
+            console.log("✅ ဒေါင်းလုဒ် အောင်မြင်သည်။");
+        } else {
+            throw new Error("File not found after download.");
+        }
+    } catch (e) {
+        console.error("❌ YouTube Download Error:", e.message);
+        throw e;
+    }
+}
+
+// TikTok Upload Part (မပြောင်းလဲပါ)
 async function uploadToTikTok(videoPath, caption) {
     const browser = await puppeteer.launch({
         headless: true,
@@ -43,36 +63,16 @@ async function uploadToTikTok(videoPath, caption) {
     }
 }
 
-// 🔥 Universal Downloader
-function downloadVideo(url, output) {
-    console.log(`📥 Downloading from: ${url}`);
-    try {
-        let command;
-        if (url.includes('youtube.com') || url.includes('youtu.be')) {
-            console.log("📺 YouTube detected. Using OAuth2 Mode...");
-            command = `yt-dlp --username oauth2 --password "" "${url}" -o "temp_raw" --no-check-certificate`;
-        } else {
-            console.log("🌐 Generic site detected. Using Standard Bypass...");
-            command = `yt-dlp "${url}" -o "temp_raw" --no-check-certificate --user-agent "Mozilla/5.0"`;
-        }
-        
-        execSync(command, { stdio: 'inherit' });
-        const downloadedFile = fs.readdirSync('.').find(f => f.startsWith('temp_raw'));
-        execSync(`ffmpeg -y -i ${downloadedFile} -c:v libx264 -preset fast -crf 28 -c:a aac "${output}"`);
-    } catch (e) {
-        throw new Error("Download failed. Link may be private or restricted.");
-    }
-}
-
 async function startBot() {
     let taskSnap = await db.collection('tasks').where('status', '==', 'processing').limit(1).get();
     if (taskSnap.empty) {
         taskSnap = await db.collection('tasks').where('status', '==', 'pending').limit(1).get();
-        if (taskSnap.empty) return console.log("💤 No tasks found.");
+        if (taskSnap.empty) return console.log("💤 Task မရှိသေးပါ။");
         const taskDoc = taskSnap.docs[0];
-        const { videoUrl } = taskDoc.data();
+        const { videoUrl, movieName } = taskDoc.data();
         try {
             downloadVideo(videoUrl, "raw.mp4");
+            console.log("✂️ ဗီဒီယို ဖြတ်နေပါသည်...");
             execSync(`ffmpeg -i "raw.mp4" -f segment -segment_time 300 -reset_timestamps 1 "part_%d.mp4"`);
             const files = fs.readdirSync('.').filter(f => f.startsWith('part_') && f.endsWith('.mp4'));
             for (let i = 0; i < files.length; i++) {
@@ -85,12 +85,14 @@ async function startBot() {
             return; 
         }
     }
+
     const taskDoc = taskSnap.docs[0];
     const { movieName } = taskDoc.data();
     const partSnap = await taskDoc.ref.collection('parts').where('status', '==', 'pending').orderBy('fileIndex').limit(1).get();
     if (!partSnap.empty) {
         const partDoc = partSnap.docs[0];
         const { fileIndex, label } = partDoc.data();
+        if (!fs.existsSync(`part_${fileIndex}.mp4`)) return;
         execSync(`ffmpeg -y -i "part_${fileIndex}.mp4" -vf "drawtext=text='${label}':fontcolor=white:fontsize=70:box=1:boxcolor=black@0.6:boxborderw=15:x=(w-text_w)/2:y=80" "final.mp4"`);
         await uploadToTikTok("final.mp4", `${movieName} - ${label} #foryou #fyp #tiktok`);
         await partDoc.ref.update({ status: 'completed' });
