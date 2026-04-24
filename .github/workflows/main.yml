@@ -1,21 +1,13 @@
-name: Telegram Continuous Auto-Queue Bot
+name: Telegram Auto-Queue Bot (Smart Cycle)
 
 on:
-  workflow_dispatch:
-  repository_dispatch:
-    types: [restart_bot]
-  # အလုပ်ရှိရင် ၁ နာရီတစ်ခါ ပွင့်စစ်ပေးဖို့ schedule ထည့်ထားပေးတယ် (Optional)
+  workflow_dispatch: # လက်နဲ့နှိပ်ပြီး Run ရန်
   schedule:
-    - cron: '0 * * * *' 
+    - cron: '0 * * * *' # ၁ နာရီတိတိုင်း အလိုအလျောက် ပွင့်စစ်ရန်
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # GitHub API ကို လှမ်းခေါ်ဖို့ ခွင့်ပြုချက် ပေးထားခြင်း
-    permissions:
-      contents: write
-      actions: write
-      
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
