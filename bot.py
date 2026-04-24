@@ -7,9 +7,6 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import yt_dlp
 
-START_TIME = time.time()
-TIMEOUT_SECONDS = 330 * 60 
-
 # --- [၁] Firebase Setup ---
 try:
     cert_dict = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT'))
@@ -18,16 +15,7 @@ try:
     db = firestore.client()
 except: exit(1)
 
-# --- [၂] GitHub ကို ပြန်နှိုးမည့် Function ---
-def restart_workflow():
-    token = os.environ.get('GH_TOKEN')
-    repo = "mratommr619-ui/yt-to-tt"
-    url = f"https://api.github.com/repos/{repo}/actions/workflows/main.yml/dispatches"
-    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
-    requests.post(url, headers=headers, json={"ref": "main"})
-    print("🚀 Sent restart signal to GitHub Actions!")
-
-# --- [၃] Fast Forward Telegram Sender ---
+# --- [၂] Fast Forward Telegram Sender ---
 def send_to_telegram(video_path, caption):
     token = os.environ.get('TELEGRAM_TOKEN')
     raw_ids = os.environ.get('TELEGRAM_CHAT_ID', '')
@@ -35,47 +23,33 @@ def send_to_telegram(video_path, caption):
     
     if not chat_ids: return False
 
-    # ၁။ ပထမဆုံး ID ဆီကို ဗီဒီယို အရင် Upload တင်မယ်
     first_id = chat_ids[0]
     upload_url = f"https://api.telegram.org/bot{token}/sendVideo"
-    file_id = None
     
     try:
-        print(f"📤 Uploading original video to: {first_id}...")
+        print(f"📤 Uploading original to: {first_id}...")
         with open(video_path, 'rb') as video_file:
             files = {'video': video_file}
             data = {'chat_id': first_id, 'caption': caption}
-            res = requests.post(upload_url, data=data, files=files).json()
+            res_raw = requests.post(upload_url, data=data, files=files)
+            res = res_raw.json()
             if res.get('ok'):
-                # တင်ပြီးသွားရင် Telegram က ပေးတဲ့ file_id ကို မှတ်ထားမယ်
                 file_id = res['result']['video']['file_id']
-                print(f"✅ Uploaded! File ID: {file_id}")
-            else:
-                print(f"❌ Upload failed: {res}")
-                return False
-    except Exception as e:
-        print(f"❌ Upload Error: {e}")
-        return False
-
-    # ၂။ ကျန်တဲ့ ID တွေဆီကို Forward (copyMessage) လုပ်မယ် (ဒါက အရမ်းမြန်တယ်)
-    if file_id and len(chat_ids) > 1:
-        forward_url = f"https://api.telegram.org/bot{token}/copyMessage"
-        for cid in chat_ids[1:]:
-            try:
-                print(f"➡️ Fast Forwarding to: {cid}...")
-                # copyMessage က Forward စာတန်း မပါဘဲ အသစ်တင်သလို ပို့ပေးတာပါ
-                f_data = {
-                    'chat_id': cid, 
-                    'from_chat_id': first_id, 
-                    'message_id': res['result']['message_id']
-                }
-                requests.post(forward_url, data=f_data)
-            except Exception as e:
-                print(f"⚠️ Forward error for {cid}: {e}")
+                msg_id = res['result']['message_id']
                 
-    return True
+                # ကျန်တဲ့ ID တွေဆီ Forward လုပ်မယ်
+                if len(chat_ids) > 1:
+                    forward_url = f"https://api.telegram.org/bot{token}/copyMessage"
+                    for cid in chat_ids[1:]:
+                        try:
+                            f_data = {'chat_id': cid, 'from_chat_id': first_id, 'message_id': msg_id}
+                            requests.post(forward_url, data=f_data)
+                        except: pass
+                return True
+            else: return False
+    except: return False
 
-# --- [၄] Universal Downloader ---
+# --- [၃] Universal Downloader ---
 def download_universal_video(video_url):
     ydl_opts = {'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 'outtmpl': 'movie.mp4', 'noplaylist': True, 'quiet': True}
     try:
@@ -83,18 +57,20 @@ def download_universal_video(video_url):
         return True
     except: return False
 
-# --- [၅] Main Process ---
+# --- [၄] Main Process (Smart Exit) ---
 def start_bot():
     tasks_ref = db.collection('tasks')
+    print("🚀 Bot checking for pending tasks...")
+    
+    # Infinite loop မဟုတ်တော့ဘဲ Pending ရှိသလောက်ပဲ လုပ်မည့်စနစ်
     while True:
-        if (time.time() - START_TIME) > TIMEOUT_SECONDS:
-            restart_workflow()
-            break 
-
+        # Pending ဖြစ်နေတဲ့ Task တစ်ခုကို ယူမယ်
         pending_query = list(tasks_ref.where('status', '==', 'pending').order_by('createdAt').limit(1).stream())
+        
         if not pending_query:
-            time.sleep(15)
-            continue
+            print("✅ No more pending tasks. Bot is shutting down to save resources.")
+            # Pending မရှိတော့ရင် Loop ထဲက ထွက်ပြီး ပိတ်လိုက်မယ်
+            break
 
         task_doc = pending_query[0]
         data = task_doc.to_dict()
@@ -102,6 +78,8 @@ def start_bot():
         movie_name = data.get('movieName', '')
         hashtags = data.get('hashtags', '#fyp #movie')
         safe_movie_name = movie_name.replace("'", "’").replace('"', '”')
+        
+        print(f"🎬 Processing: {movie_name}")
         task_doc.reference.update({'status': 'processing'})
 
         if not download_universal_video(video_url):
@@ -135,7 +113,10 @@ def start_bot():
 
             if os.path.exists("movie.mp4"): os.remove("movie.mp4")
             task_doc.reference.update({'status': 'completed'})
-        except:
+            print(f"✅ Finished: {movie_name}")
+            
+        except Exception as e:
+            print(f"❌ Error: {e}")
             task_doc.reference.update({'status': 'error'})
 
 if __name__ == "__main__":
