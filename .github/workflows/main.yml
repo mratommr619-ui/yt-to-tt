@@ -1,8 +1,8 @@
 name: Video Processor
 on:
   schedule:
-    - cron: '*/15 * * * *' # ၁၅ မိနစ်တစ်ခါ အလိုအလျောက် နိုးမည်
-  workflow_dispatch: # Manual နှိပ်ပြီး Run လို့ရအောင် ထည့်ထားသည်
+    - cron: '*/5 * * * *' # ဖိုင်တွေ သက်တမ်းမကုန်ခင် ပိုမြန်မြန်လုပ်နိုင်အောင် ၅ မိနစ်တစ်ခါ ပြောင်းထားသည်
+  workflow_dispatch: # Manual နှိပ်ပြီး Run လို့ရအောင်
 
 jobs:
   build:
@@ -14,7 +14,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11' # Python Version ကို 3.11 သို့ မြှင့်တင်လိုက်သည် (Warning ပျောက်စေရန်)
 
       - name: Install System Dependencies
         run: |
@@ -23,12 +23,13 @@ jobs:
 
       - name: Install Python Libraries
         run: |
-          pip install pyrogram tgcrypto firebase-admin requests yt-dlp gdown python-telegram-bot
+          # Library အားလုံးကို အသစ်ဆုံး Version ဖြစ်အောင် install လုပ်သည်
+          pip install --upgrade pip
+          pip install pyrogram tgcrypto firebase-admin requests yt-dlp gdown
 
       - name: Run Video Processor
         run: python bot.py
         env:
-          # GitHub Secrets ထဲမှာ ဒီနာမည်တွေအတိုင်း သေချာထည့်ထားပေးပါ
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
