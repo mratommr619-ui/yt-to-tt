@@ -1,19 +1,23 @@
 import os
 import json
+import asyncio
 import subprocess
-import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
+from pyrogram import Client
 
 # --- Setup ---
+API_ID = int(os.environ.get('API_ID'))
+API_HASH = os.environ.get('API_HASH')
+BOT_TOKEN = os.environ.get('TELEGRAM_TOKEN')
+
 cert_dict = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT'))
 cred = credentials.Certificate(cert_dict)
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 db = firestore.client()
-TOKEN = os.environ.get('TELEGRAM_TOKEN')
 
-def process():
+async def main():
     query = db.collection('tasks').where('status', '==', 'pending').order_by('createdAt').limit(1).get()
     if not query: return
 
@@ -24,54 +28,42 @@ def process():
     split_time = int(data.get('split_minute', 5)) * 60
 
     task_doc.reference.update({'status': 'processing'})
-    
-    # --- Download with Error Checking ---
-    res_raw = requests.get(f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={data['file_id']}")
-    res = res_raw.json()
-    
-    if not res.get('ok'):
-        print(f"Telegram API Error: {res}")
-        task_doc.reference.update({'status': 'error', 'error_msg': 'File access denied'})
-        return
 
-    file_path = res['result']['file_path']
-    video_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
-    
-    with requests.get(video_url, stream=True) as r:
-        with open("movie.mp4", 'wb') as f:
-            for chunk in r.iter_content(chunk_size=8192): f.write(chunk)
-
-    try:
-        # Split
-        subprocess.run(f'ffmpeg -i "movie.mp4" -c copy -f segment -segment_time {split_time} -reset_timestamps 1 "p_%d.mp4"', shell=True)
-        parts = sorted([f for f in os.listdir('.') if f.startswith('p_')], key=lambda x: int(x.split('_')[1].split('.')[0]))
-        num_parts = len(parts)
-
-        # Status Message
-        status_txt = f"✅ ဗီဒီယိုကို အပိုင်း ({num_parts}) ပိုင်း ရရှိပါသည်။ အစဉ်အတိုင်း ပို့ဆောင်ပေးသွားပါမည်။" if lang == 'my' else f"✅ Video split into ({num_parts}) parts. Sending..."
-        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data={'chat_id': user_id, 'text': status_txt})
-
-        for i, p in enumerate(parts):
-            is_last = (i == num_parts - 1)
-            if lang == 'my':
-                label = f"အပိုင်း({i+1})" if not is_last else "ဇာတ်သိမ်းပိုင်း"
-            else:
-                label = f"Part-{i+1}" if not is_last else "End Part"
+    async with Client("my_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN) as app:
+        try:
+            # Download Video (No 20MB limit)
+            print("Downloading...")
+            file_path = await app.download_media(data['file_id'], file_name="movie.mp4")
             
-            caption = f"{movie_name} + {label}"
-            if wm_text: caption += f" + {wm_text}"
+            # Split
+            subprocess.run(f'ffmpeg -i "movie.mp4" -c copy -f segment -segment_time {split_time} -reset_timestamps 1 "p_%d.mp4"', shell=True)
+            parts = sorted([f for f in os.listdir('.') if f.startswith('p_')], key=lambda x: int(x.split('_')[1].split('.')[0]))
+            num_parts = len(parts)
 
-            vf = f"drawtext=text='{label}':fontcolor=white:fontsize=h/10:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,3)'"
-            if wm_text: vf += f",drawtext=text='{wm_text}':fontcolor=white@0.3:fontsize=h/22:x=w-text_w-20:y=h-text_h-20"
-            
-            subprocess.run(f'ffmpeg -y -i "{p}" -vf "{vf}" -c:v libx264 -crf 20 -c:a copy "out.mp4"', shell=True)
-            with open("out.mp4", 'rb') as v:
-                requests.post(f"https://api.telegram.org/bot{TOKEN}/sendVideo", data={'chat_id': user_id, 'caption': caption}, files={'video': v})
-            os.remove(p); os.remove("out.mp4")
+            # Send Status
+            status_txt = f"✅ ဗီဒီယိုကို အပိုင်း ({num_parts}) ပိုင်း ရရှိပါသည်။ အစဉ်အတိုင်း ပို့ဆောင်ပေးသွားပါမည်။" if lang == 'my' else f"✅ Video split into ({num_parts}) parts. Sending..."
+            await app.send_message(user_id, status_txt)
 
-        os.remove("movie.mp4")
-        task_doc.reference.update({'status': 'completed'})
-    except Exception as e:
-        task_doc.reference.update({'status': 'error', 'error_msg': str(e)})
+            for i, p in enumerate(parts):
+                is_last = (i == num_parts - 1)
+                label = (f"အပိုင်း({i+1})" if lang == 'my' else f"Part-{i+1}") if not is_last else ("ဇာတ်သိမ်းပိုင်း" if lang == 'my' else "End Part")
+                
+                caption = f"{movie_name} + {label}"
+                if wm_text: caption += f" + {wm_text}"
 
-if __name__ == "__main__": process()
+                vf = f"drawtext=text='{label}':fontcolor=white:fontsize=h/10:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,3)'"
+                if wm_text: vf += f",drawtext=text='{wm_text}':fontcolor=white@0.3:fontsize=h/22:x=w-text_w-20:y=h-text_h-20"
+                
+                subprocess.run(f'ffmpeg -y -i "{p}" -vf "{vf}" -c:v libx264 -crf 20 -c:a copy "out.mp4"', shell=True)
+                await app.send_video(user_id, video="out.mp4", caption=caption)
+                
+                os.remove(p)
+                os.remove("out.mp4")
+
+            os.remove("movie.mp4")
+            task_doc.reference.update({'status': 'completed'})
+        except Exception as e:
+            task_doc.reference.update({'status': 'error', 'error_msg': str(e)})
+
+if __name__ == "__main__":
+    asyncio.run(main())
