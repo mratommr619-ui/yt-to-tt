@@ -1,3 +1,4 @@
+pyrogram
+tgcrypto
 firebase-admin
 requests
-yt-dlp
