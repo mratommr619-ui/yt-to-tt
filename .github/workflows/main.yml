@@ -1,33 +1,21 @@
 name: Video Processor
 on:
   schedule:
-    - cron: '*/5 * * * *' # ဖိုင်တွေ သက်တမ်းမကုန်ခင် ပိုမြန်မြန်လုပ်နိုင်အောင် ၅ မိနစ်တစ်ခါ ပြောင်းထားသည်
-  workflow_dispatch: # Manual နှိပ်ပြီး Run လို့ရအောင်
-
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # Python Version ကို 3.11 သို့ မြှင့်တင်လိုက်သည် (Warning ပျောက်စေရန်)
-
-      - name: Install System Dependencies
+          python-version: '3.11'
+      - name: Install Tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
-      - name: Install Python Libraries
-        run: |
-          # Library အားလုံးကို အသစ်ဆုံး Version ဖြစ်အောင် install လုပ်သည်
-          pip install --upgrade pip
+          sudo apt-get update && sudo apt-get install -y ffmpeg
           pip install pyrogram tgcrypto firebase-admin requests yt-dlp gdown
-
-      - name: Run Video Processor
+      - name: Run
         run: python bot.py
         env:
           API_ID: ${{ secrets.API_ID }}
