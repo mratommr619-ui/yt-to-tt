@@ -5,7 +5,7 @@ import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Setup
+# --- Setup ---
 cert_dict = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT'))
 cred = credentials.Certificate(cert_dict)
 if not firebase_admin._apps:
@@ -25,9 +25,18 @@ def process():
 
     task_doc.reference.update({'status': 'processing'})
     
-    # Download
-    res = requests.get(f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={data['file_id']}").json()
-    video_url = f"https://api.telegram.org/file/bot{TOKEN}/{res['result']['file_path']}"
+    # --- Download with Error Checking ---
+    res_raw = requests.get(f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={data['file_id']}")
+    res = res_raw.json()
+    
+    if not res.get('ok'):
+        print(f"Telegram API Error: {res}")
+        task_doc.reference.update({'status': 'error', 'error_msg': 'File access denied'})
+        return
+
+    file_path = res['result']['file_path']
+    video_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+    
     with requests.get(video_url, stream=True) as r:
         with open("movie.mp4", 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192): f.write(chunk)
@@ -39,12 +48,11 @@ def process():
         num_parts = len(parts)
 
         # Status Message
-        status_txt = f"✅ ဗီဒီယိုကို အပိုင်း ({num_parts}) ပိုင်း ရရှိပါသည်။ အစဉ်အတိုင်း ပို့ဆောင်ပေးသွားပါမည်။" if lang == 'my' else f"✅ Video split into ({num_parts}) parts. Sending in order..."
+        status_txt = f"✅ ဗီဒီယိုကို အပိုင်း ({num_parts}) ပိုင်း ရရှိပါသည်။ အစဉ်အတိုင်း ပို့ဆောင်ပေးသွားပါမည်။" if lang == 'my' else f"✅ Video split into ({num_parts}) parts. Sending..."
         requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data={'chat_id': user_id, 'text': status_txt})
 
         for i, p in enumerate(parts):
             is_last = (i == num_parts - 1)
-            # Caption & Label Logic
             if lang == 'my':
                 label = f"အပိုင်း({i+1})" if not is_last else "ဇာတ်သိမ်းပိုင်း"
             else:
@@ -63,6 +71,7 @@ def process():
 
         os.remove("movie.mp4")
         task_doc.reference.update({'status': 'completed'})
-    except: task_doc.reference.update({'status': 'error'})
+    except Exception as e:
+        task_doc.reference.update({'status': 'error', 'error_msg': str(e)})
 
 if __name__ == "__main__": process()
