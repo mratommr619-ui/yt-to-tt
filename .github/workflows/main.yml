@@ -1,7 +1,7 @@
 name: Video Processor
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 jobs:
   build:
@@ -11,10 +11,14 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - run: |
+      - name: Install Dependencies
+        run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install firebase-admin requests
-          python bot.py
+          pip install pyrogram tgcrypto firebase-admin requests
+      - name: Run Processor
+        run: python bot.py
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
