@@ -1,23 +1,37 @@
 name: Video Processor
+
 on:
   schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
+    - cron: '*/5 * * * *' # ၅ မိနစ်တစ်ခါ အလိုအလျောက် နိုးမည်
+  workflow_dispatch: # GitHub Actions Tab မှ Manual နှိပ်၍ Run ရန်
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-      - name: Install Tools
+          python-version: '3.11' # Firebase Support ပေးသော Version
+
+      - name: Install System Dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python Libraries
+        run: |
+          pip install --upgrade pip
           pip install pyrogram tgcrypto firebase-admin requests yt-dlp gdown
-      - name: Run
+
+      - name: Run Video Processor
         run: python bot.py
         env:
+          # GitHub Secrets ထဲမှာ ဒီနာမည်တွေအတိုင်း သေချာထည့်ထားပေးပါ
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
