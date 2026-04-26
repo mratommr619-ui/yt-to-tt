@@ -5,7 +5,7 @@ from firebase_admin import credentials, firestore
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- [Port Fix for Render] ---
+# --- [Render Port Fix] ---
 def run_dummy_server():
     http.server.HTTPServer(('', int(os.environ.get("PORT", 8080))), 
     type('H', (http.server.SimpleHTTPRequestHandler,), {'do_GET': lambda s: (s.send_response(200), s.end_headers(), s.wfile.write(b"OK"))})).serve_forever()
@@ -42,7 +42,7 @@ TEXTS = {
         'ask_len': "⏱ **Minutes per part?** (Default 5)",
         'ask_wm': "📝 **Enter Watermark** (Or /skip)",
         'done': "⏳ **Received!** Processing...",
-        'expired': "⚠️ **Expired!** Please pay to:\nKPay: `{}`\nUSDT: `{}`".format(KPAY_NO, AYAPAY_NO, USDT_ADDRESS),
+        'expired': "⚠️ **Expired!**\n\nKPay: `{}`\nAYA: `{}`\nUSDT: `{}`\n\nPlease send Screenshot after payment.".format(KPAY_NO, AYAPAY_NO, USDT_ADDRESS),
         'no_yt': "❌ YouTube not supported."
     }
 }
@@ -67,8 +67,8 @@ async def set_lang(c, q):
 @app.on_message(filters.photo & filters.private)
 async def handle_ss(c, m):
     await m.forward(ADMIN_ID)
-    await c.send_message(ADMIN_ID, f"💰 **Payment SS**\nUID: `{m.from_user.id}`")
-    await m.reply_text("✅ Screenshot ရရှိပါသည်။ Admin စစ်ဆေးပြီး သက်တမ်းတိုးပေးပါမည်။")
+    await c.send_message(ADMIN_ID, f"💰 **Payment Alert**\nFrom UID: `{m.from_user.id}`\nUsername: @{m.from_user.username or 'None'}")
+    await m.reply_text("✅ Screenshot ရရှိပါသည်။ Admin စစ်ဆေးပြီး သက်တမ်းတိုးပေးပါမည်။" if "lang_my" in str(m) else "✅ Screenshot received. Admin will verify.")
 
 @app.on_message((filters.video | filters.text) & filters.private)
 async def handle_input(c, m):
@@ -77,6 +77,7 @@ async def handle_input(c, m):
     if not u_doc: return
     lang = u_doc['lang']
 
+    # Expiry Check
     if datetime.now() > datetime.strptime(u_doc['expiry_date'], "%Y-%m-%d %H:%M:%S"):
         await m.reply_text(TEXTS[lang]['expired']); return
 
