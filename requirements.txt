@@ -1,6 +1,5 @@
 pyrogram
 tgcrypto
-python-telegram-bot
 firebase-admin
 yt-dlp
 gdown
