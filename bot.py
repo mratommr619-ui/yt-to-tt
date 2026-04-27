@@ -15,19 +15,11 @@ async def process_video():
     api_hash = os.environ.get("API_HASH")
     bot_token = os.environ.get("TELEGRAM_TOKEN")
 
-    if not session_str:
-        print("❌ SESSION_STRING missing!")
-        return
-
-    # Client ကို အရင် Create လုပ်မယ်
-    client = TelegramClient(StringSession(session_str), api_id, api_hash, connection_retries=10)
-
-    # Bot Token နဲ့ အရင် Start လုပ်မယ် (coroutine ကို await လုပ်ခြင်း)
+    client = TelegramClient(StringSession(session_str), api_id, api_hash)
     await client.start(bot_token=bot_token)
     
-    # ပြီးမှ async with ကို သုံးမယ်
     async with client:
-        print("✅ Bot Login Successful! Running as BOT.")
+        print("🚀 Sequential Processing Started...")
         
         start_runtime = time.time()
         while time.time() - start_runtime < 21000:
@@ -38,38 +30,46 @@ async def process_video():
             if not active_task:
                 await asyncio.sleep(20); continue
             
-            doc = active_task[0]; data = doc.to_dict()
-            uid = int(data['user_id'])
+            doc = active_task[0]; data = doc.to_dict(); uid = int(data['user_id'])
             task_ref = doc.reference
             
             try:
                 task_ref.update({'status': 'processing'})
-                last_sent = data.get('last_sent_index', -1)
+                # database မှာ last_sent_index က 0 ဆိုရင် part 1 ပို့ပြီးသားလို့ မှတ်မယ်
+                last_sent = data.get('last_sent_index', -1) 
                 target = "movie.mp4"
                 
-                print(f"📥 Downloading: {data.get('name')}")
                 if not os.path.exists(target):
+                    print(f"📥 Downloading: {data.get('name')}")
                     if data['type'] == 'video':
                         await client.download_media(data['value'], target)
                     else:
                         subprocess.run(['yt-dlp', '-f', 'b[ext=mp4]/best', '--no-check-certificate', '-o', target, data['value']], check=True)
 
-                if not os.path.exists(target): raise Exception("Download Failed")
-
-                print("✂️ Splitting video...")
+                # --- Split logic ပြင်ဆင်ခြင်း ---
+                print("✂️ Splitting video into parts (Starting from 1)...")
                 split_s = int(data.get('len', 5)) * 60
-                subprocess.run(['ffmpeg', '-y', '-i', target, '-c', 'copy', '-f', 'segment', '-segment_time', str(split_s), '-reset_timestamps', '1', 'p_%d.mp4'], check=True)
+                # -segment_start_number 1 ထည့်လိုက်လို့ p_1.mp4 ကနေ စထွက်လာပါလိမ့်မယ်
+                subprocess.run(['ffmpeg', '-y', '-i', target, '-c', 'copy', '-f', 'segment', '-segment_start_number', '1', '-segment_time', str(split_s), '-reset_timestamps', '1', 'p_%d.mp4'], check=True)
                 if os.path.exists(target): os.remove(target)
 
-                parts = sorted([f for f in os.listdir('.') if f.startswith('p_')], key=lambda x: int(re.search(r'\d+', x).group()))
-                total_parts = len(parts)
+                # ဖိုင်တွေကို ရှာပြီး နံပါတ်စဉ်အလိုက် စီမယ်
+                parts_files = [f for f in os.listdir('.') if f.startswith('p_') and f.endswith('.mp4')]
+                # p_1, p_2, p_10 ဆိုတာမျိုးကို နံပါတ်အတိုင်း အတိအကျ စီမယ်
+                parts_files.sort(key=lambda x: int(re.search(r'\d+', x).group()))
+                total_parts = len(parts_files)
 
-                for i, p in enumerate(parts):
-                    if i <= last_sent:
+                for p in parts_files:
+                    # ဖိုင်နာမည်ကနေ part number ယူမယ် (p_1.mp4 ဆိုရင် num က 1 ဖြစ်မယ်)
+                    num = int(re.search(r'\d+', p).group())
+                    
+                    # ပို့ပြီးသားလား စစ်မယ် (last_sent က num ထက်ကြီးနေရင် ပို့ပြီးသား)
+                    if num <= last_sent:
                         if os.path.exists(p): os.remove(p)
                         continue
                     
-                    out = f"final_{i}.mp4"
+                    print(f"⚙️ Processing Part {num}/{total_parts}...")
+                    out = f"final_{num}.mp4"
                     wm = data.get('wm', '')
                     
                     if wm:
@@ -79,18 +79,20 @@ async def process_video():
                         os.rename(p, out)
                     
                     if os.path.exists(out):
-                        caption_text = f"{data.get('name')} Part {i+1}"
-                        if i == total_parts - 1: caption_text += " (End Part) ✅"
+                        caption_text = f"{data.get('name')} Part {num}"
+                        if num == total_parts: caption_text += " (End Part) ✅"
                         
-                        print(f"📤 Sending Part {i+1}/{total_parts} to {uid}...")
+                        print(f"📤 Sending Part {num} to {uid}...")
                         await client.send_file(uid, out, caption=caption_text, supports_streaming=True)
                         
-                        task_ref.update({'last_sent_index': i})
+                        # Database မှာ ဒီ part number ကို ပို့ပြီးကြောင်း မှတ်မယ်
+                        task_ref.update({'last_sent_index': num})
                         os.remove(out)
+                    
                     if os.path.exists(p): os.remove(p)
 
                 task_ref.update({'status': 'completed'})
-                print(f"✅ Mission Success for {uid}")
+                print(f"✅ Finished task for {uid}")
 
             except Exception as e:
                 print(f"❌ Error: {e}")
