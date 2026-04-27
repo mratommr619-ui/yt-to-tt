@@ -1,15 +1,25 @@
-import os, json, re, http.server, threading
+import os, json, re, http.server, threading, time, requests
 from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, firestore
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- [Render Port Fix] ---
+# --- [Render Anti-Sleep Fix] ---
+def keep_alive():
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    while True:
+        try:
+            if url: requests.get(url)
+        except: pass
+        time.sleep(600)
+
 def run_dummy_server():
     http.server.HTTPServer(('', int(os.environ.get("PORT", 8080))), 
     type('H', (http.server.SimpleHTTPRequestHandler,), {'do_GET': lambda s: (s.send_response(200), s.end_headers(), s.wfile.write(b"OK"))})).serve_forever()
+
 threading.Thread(target=run_dummy_server, daemon=True).start()
+threading.Thread(target=keep_alive, daemon=True).start()
 
 # --- [Firebase Connection] ---
 db = None
@@ -26,19 +36,17 @@ app = Client("interface_bot", api_id=int(os.environ.get("API_ID")), api_hash=os.
 # --- [Admin & Settings] ---
 ADMIN_ID = 1715890141 
 KPAY_NO = "09695616591"
-AYAPAY_NO = "09695616591"
 USDT_ADDRESS = "0x56824c51be35937da7E60a6223E82cD1795984cC"
 
 TEXTS = {
     'my': {
         'start': "👋 **မင်္ဂလာပါ Movie Spliter Bot မှ ကြိုဆိုပါတယ်**\n\nရှေ့ဆက်ရန် ဘာသာစကား ရွေးချယ်ပေးပါ။",
         'intro': (
-            "🚀 **Professional Video Splitter Bot**\n\n"
-            "ဒီ Bot က သင့်အတွက် ဘာတွေလုပ်ပေးနိုင်မလဲ?\n"
-            "✅ **Fast Splitting:** ဗီဒီယိုအရှည်ကြီးတွေကို မိနစ်အလိုက် အမြန်ဆုံး ဖြတ်ပေးခြင်း။\n"
-            "✅ **Link Support:** Drive, TikTok, FB, Bilibili Link များကို တိုက်ရိုက်ဒေါင်းပြီး အပိုင်းဖြတ်ပေးခြင်း။\n"
-            "✅ **Watermark:** ကိုယ်ပိုင်စာသား Watermark ကို ဗီဒီယိုမှာ ထည့်သွင်းပေးခြင်း။\n"
-            "✅ **HD Quality:** ဗီဒီယို အရည်အသွေး မကျဘဲ စနစ်တကျ အပိုင်းခွဲပေးခြင်း။\n\n"
+            "🚀 **ဒီ Bot က ဘာတွေလုပ်ပေးနိုင်သလဲ?**\n\n"
+            "🎬 **Video Splitting:** ဗီဒီယိုအရှည်ကြီးတွေကို မိနစ်အလိုက် စနစ်တကျ အပိုင်းဖြတ်ပေးခြင်း။\n"
+            "🔗 **Link Support:** Drive, Bilibili, Facebook, TikTok Link တွေကို တိုက်ရိုက်ဒေါင်းပြီး အပိုင်းဖြတ်ပေးခြင်း။\n"
+            "📝 **Watermark:** ကိုယ်ပိုင်စာသား Watermark များကို ဗီဒီယိုပေါ်တွင် ထည့်သွင်းပေးခြင်း။\n"
+            "⚡ **High Speed:** အချိန်တိုအတွင်း အပိုင်းများကို အမြန်ဆုံးပြန်ပို့ပေးခြင်း။\n\n"
             "👇 **အခုပဲ ဗီဒီယိုဖိုင် (သို့) Link တစ်ခုခု ပို့ပြီး စမ်းသပ်ကြည့်လိုက်ပါ!**"
         ),
         'ask_name': "📝 **Movie Name ပေးပါ** (ကျော်ရန် /skip)",
@@ -47,27 +55,20 @@ TEXTS = {
         'done': "⏳ **လက်ခံရရှိပါပြီ**။ အပိုင်းများ မကြာမီ ပြန်ပို့ပေးပါမည်။",
         'expired': (
             "⚠️ **သင့်ရဲ့ ၁ ရက် Trial သက်တမ်း ကုန်ဆုံးသွားပါပြီ**\n\n"
-            "ဆက်လက်အသုံးပြုလိုပါက Premium ဝယ်ယူနိုင်ပါတယ်။\n\n"
             "💰 **Premium Price:** ၃၀၀၀ ကျပ် / 1.0 USDT\n"
             f"💳 **KPay/AYA:** `{KPAY_NO}`\n"
-            f"🌐 **USDT (TRC20):** `{USDT_ADDRESS}`\n\n"
+            f"🌐 **USDT:** `{USDT_ADDRESS}`\n\n"
             "ငွေလွှဲပြီး Screenshot ပုံကို ပို့ပေးပါ။"
         )
     },
     'en': {
-        'start': "👋 **Welcome!** Please select language.",
-        'intro': (
-            "🚀 **Professional Video Splitter Bot**\n\n"
-            "✅ **Fast Splitting:** Cut long videos in seconds.\n"
-            "✅ **Link Support:** Direct splitting from Drive, TikTok, FB links.\n"
-            "✅ **Watermark:** Add custom watermark easily.\n\n"
-            "👇 **Send a Video or Link now!**"
-        ),
-        'ask_name': "📝 **Enter Movie Name** (Or /skip)",
+        'start': "👋 **Welcome!** Select language.",
+        'intro': "🚀 **Professional Video Splitter Bot**\n\nHigh-speed splitting, Link support, and Watermark features.\n\n👇 **Send a Video or Link now!**",
+        'ask_name': "📝 **Movie Name** (Or /skip)",
         'ask_len': "⏱ **Minutes per part?**",
-        'ask_wm': "📝 **Enter Watermark** (Or /skip)",
+        'ask_wm': "📝 **Watermark text?**",
         'done': "⏳ **Received!** Processing...",
-        'expired': "⚠️ Your 1-day Trial has Expired! Upgrade to Premium."
+        'expired': "⚠️ Trial Expired! Please pay to continue."
     }
 }
 
@@ -86,12 +87,6 @@ async def set_lang(c, q):
     else: u_ref.update({'lang': lang, 'step': 'idle'})
     await q.edit_message_text(TEXTS[lang]['intro'])
 
-@app.on_message(filters.photo & filters.private)
-async def handle_ss(c, m):
-    await m.forward(ADMIN_ID)
-    await c.send_message(ADMIN_ID, f"💰 **Payment SS**\nFrom UID: `{m.from_user.id}`")
-    await m.reply_text("✅ Screenshot လက်ခံရရှိပါသည်။ စစ်ဆေးပြီးပါက သက်တမ်းတိုးပေးပါမည်။")
-
 @app.on_message(filters.private)
 async def main_handler(c, m):
     if not db: return
@@ -103,21 +98,18 @@ async def main_handler(c, m):
     
     lang, step = u_doc.get('lang', 'my'), u_doc.get('step', 'idle')
 
-    # Expiry Check (၁ ရက်ပြည့်မှ ငွေတောင်းမည်)
     if datetime.now() > datetime.strptime(u_doc['expiry_date'], "%Y-%m-%d %H:%M:%S"):
         await m.reply_text(TEXTS[lang]['expired']); return
 
-    # Media Check
     is_media = m.video or (m.document and m.document.mime_type and "video" in m.document.mime_type)
-    link_match = re.findall(r'https?://[^\s]+', m.text) if m.text else []
+    link = re.findall(r'https?://[^\s]+', m.text)[0] if m.text and re.findall(r'https?://[^\s]+', m.text) else None
 
-    if (is_media or link_match) and not (m.text and m.text.startswith("/")):
-        val = m.video.file_id if m.video else (m.document.file_id if m.document else link_match[0])
+    if (is_media or link) and not (m.text and m.text.startswith("/")):
+        val = m.video.file_id if m.video else (m.document.file_id if m.document else link)
         u_ref.update({'step': 'name', 'temp_type': 'video' if is_media else 'link', 'temp_val': val})
         await m.reply_text(TEXTS[lang]['ask_name'])
         return
 
-    # Step-by-Step Logic (Firestore ထဲတွင် အဆင့်ဆင့်မှတ်မည်)
     if m.text and step != 'idle':
         if step == 'name':
             u_ref.update({'temp_name': "Movie" if m.text == "/skip" else m.text, 'step': 'len'})
@@ -129,11 +121,10 @@ async def main_handler(c, m):
             except: await m.reply_text("ဂဏန်းရိုက်ပါ")
         elif step == 'wm':
             wm = "" if m.text == "/skip" else m.text
-            # Final Task ကို Database သို့ ပို့မည်
             db.collection('tasks').add({
                 'user_id': uid, 'type': u_doc.get('temp_type'), 'value': u_doc.get('temp_val'),
                 'name': u_doc.get('temp_name'), 'len': u_doc.get('temp_len'), 'wm': wm,
-                'lang': lang, 'status': 'pending', 'createdAt': firestore.SERVER_TIMESTAMP
+                'status': 'pending', 'createdAt': firestore.SERVER_TIMESTAMP
             })
             u_ref.update({'step': 'idle'})
             await m.reply_text(TEXTS[lang]['done'])
