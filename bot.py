@@ -1,4 +1,4 @@
-import os, json, asyncio, subprocess, firebase_admin, time, re
+import os, json, asyncio, subprocess, firebase_admin, time, re, requests
 from firebase_admin import credentials, firestore
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -9,60 +9,78 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
 db = firestore.client()
 
+def resolve_url(url):
+    """Short URL တွေကို မူရင်း Link အရှည်ဖြစ်အောင် ဖြည်ပေးတဲ့ function"""
+    try:
+        response = requests.head(url, allow_redirects=True, timeout=10)
+        return response.url
+    except:
+        return url
+
 async def process_video():
     session_str = os.environ.get("SESSION_STRING")
     api_id = int(os.environ.get("API_ID"))
     api_hash = os.environ.get("API_HASH")
     bot_token = os.environ.get("TELEGRAM_TOKEN")
 
-    if not session_str: return print("❌ Missing SESSION_STRING")
-
-    # Client ကို တည်ဆောက်
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
-    
-    # AuthKeyDuplicatedError မတက်အောင် connect ကိုပဲ သုံးမယ်
     await client.connect()
     if not await client.is_user_authorized():
         await client.start(bot_token=bot_token)
 
     async with client:
-        print("✅ Bot Connected Successfully.")
+        print("🚀 Universal Video Processor is Online...")
         
         start_runtime = time.time()
         while time.time() - start_runtime < 21000:
-            # Firestore ကနေ အစဉ်လိုက် Task ယူမယ်
-            active_task = db.collection('tasks').where("status", "==", "processing").limit(1).get()
-            if not active_task:
-                active_task = db.collection('tasks').where("status", "==", "pending").limit(1).get()
+            task = db.collection('tasks').where("status", "==", "processing").limit(1).get()
+            if not task: task = db.collection('tasks').where("status", "==", "pending").limit(1).get()
             
-            if not active_task:
+            if not task:
                 await asyncio.sleep(20); continue
             
-            doc = active_task[0]; data = doc.to_dict()
-            target_uid = int(data['user_id'])
+            doc = task[0]; data = doc.to_dict(); target_uid = int(data['user_id'])
             task_ref = doc.reference
             
             try:
                 task_ref.update({'status': 'processing'})
                 last_sent = data.get('last_sent_index', -1)
+                source_value = data.get('value', '')
                 target = "movie.mp4"
                 
-                # ၁။ ဒေါင်းမယ်
-                print(f"📥 Downloading for {target_uid}...")
-                if data['type'] == 'video':
-                    await client.download_media(data['value'], target)
-                else:
-                    subprocess.run(['yt-dlp', '-f', 'b[ext=mp4]/best', '--no-check-certificate', '-o', target, data['value']], check=True)
+                if not os.path.exists(target):
+                    print(f"📥 Attempting to download from source: {source_value[:30]}...")
 
-                if not os.path.exists(target): raise Exception("Download Failed")
+                    # ၁။ Telegram File ဖြစ်နေရင် (BAACAg... နဲ့ စရင်)
+                    if source_value.startswith('BAACAg'):
+                        await client.download_media(source_value, target)
+                    
+                    # ၂။ အခြား Link တွေဖြစ်ရင် (URL)
+                    else:
+                        # Short URL ဖြည်မယ်
+                        real_url = resolve_url(source_value)
+                        print(f"🔗 Resolved URL: {real_url}")
+                        
+                        # yt-dlp နဲ့ ဒေါင်းမယ် (ဘာ Link လာလာ သူက handle လုပ်နိုင်တယ်)
+                        # --no-check-certificate နဲ့ --location (redirects) တွေကို သုံးထားတယ်
+                        cmd = [
+                            'yt-dlp', 
+                            '-f', 'b[ext=mp4]/best', 
+                            '--no-check-certificate',
+                            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                            '-o', target, 
+                            real_url
+                        ]
+                        subprocess.run(cmd, check=True)
 
-                # ၂။ အပိုင်းပိုင်းမယ် (Part 1 ကနေ စမယ်)
-                print("✂️ Splitting video...")
+                if not os.path.exists(target): raise Exception("Download Failed!")
+
+                # --- Split & Send Logic (အစဉ်လိုက် သွားမယ်) ---
+                print("✂️ Splitting...")
                 split_s = int(data.get('len', 5)) * 60
                 subprocess.run(['ffmpeg', '-y', '-i', target, '-c', 'copy', '-f', 'segment', '-segment_start_number', '1', '-segment_time', str(split_s), '-reset_timestamps', '1', 'p_%d.mp4'], check=True)
                 if os.path.exists(target): os.remove(target)
 
-                # ၃။ ဖိုင်တွေကို နံပါတ်စဉ်အလိုက် အတိအကျစီမယ်
                 parts = sorted([f for f in os.listdir('.') if f.startswith('p_')], key=lambda x: int(re.search(r'\d+', x).group()))
                 total_parts = len(parts)
 
@@ -72,10 +90,8 @@ async def process_video():
                         if os.path.exists(p): os.remove(p)
                         continue
                     
-                    print(f"⚙️ Processing Part {num}/{total_parts}...")
                     out = f"final_{num}.mp4"
                     wm = data.get('wm', '')
-                    
                     if wm:
                         vf = f"drawtext=text='{wm}':fontcolor=white@0.6:fontsize=h/15:x='if(gte(t,0),mod(t*100,w),0)':y='(h-text_h)/2 + sin(t)*100'"
                         subprocess.run(['ffmpeg', '-y', '-i', p, '-vf', vf, '-c:v', 'libx264', '-crf', '23', '-c:a', 'copy', out], check=True)
@@ -83,19 +99,15 @@ async def process_video():
                         os.rename(p, out)
                     
                     if os.path.exists(out):
-                        caption = f"{data.get('name')} Part {num}"
-                        if num == total_parts: caption += " (End Part) ✅"
-                        
-                        # ၄။ User ဆီ တိုက်ရိုက်ပို့ (Saved Messages မရောက်စေရ)
-                        print(f"📤 Sending Part {num} to {target_uid}...")
-                        await client.send_file(target_uid, out, caption=caption, supports_streaming=True)
-                        
+                        cap = f"{data.get('name')} Part {num}"
+                        if num == total_parts: cap += " (End Part) ✅"
+                        await client.send_file(target_uid, out, caption=cap, supports_streaming=True)
                         task_ref.update({'last_sent_index': num})
                         os.remove(out)
                     if os.path.exists(p): os.remove(p)
 
                 task_ref.update({'status': 'completed'})
-                print(f"✅ Mission Finished for {target_uid}")
+                print(f"✅ Finished task for {target_uid}")
 
             except Exception as e:
                 print(f"❌ Error: {e}")
