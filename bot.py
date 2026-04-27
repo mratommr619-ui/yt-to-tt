@@ -1,6 +1,6 @@
 import os, json, asyncio, subprocess, firebase_admin, time, re, requests
 from firebase_admin import credentials, firestore
-from telethon import TelegramClient, errors
+from telethon import TelegramClient
 from telethon.sessions import StringSession
 
 # Firebase Setup
@@ -8,6 +8,13 @@ cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
 if not firebase_admin._apps:
     firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
 db = firestore.client()
+
+def resolve_url(url):
+    try:
+        response = requests.head(url, allow_redirects=True, timeout=10)
+        return response.url
+    except:
+        return url
 
 async def process_video():
     session_str = os.environ.get("SESSION_STRING")
@@ -18,12 +25,11 @@ async def process_video():
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
     await client.connect()
     
-    # Session Expire မဖြစ်အောင် Double Check
     if not await client.is_user_authorized():
         await client.start(bot_token=bot_token)
 
     async with client:
-        print("✅ Bot starts working. No more errors hopefully!")
+        print("✅ Sequential Worker is active. No more syntax errors.")
         
         start_runtime = time.time()
         while time.time() - start_runtime < 21000:
@@ -37,53 +43,64 @@ async def process_video():
             
             try:
                 task_ref.update({'status': 'processing'})
+                last_sent = data.get('last_sent_index', -1)
                 source_value = data.get('value', '')
                 target = "movie.mp4"
                 
-                # ၁။ Telegram File ကို ပိုသေချာအောင် ဒေါင်းမယ်
+                # ၁။ ဗီဒီယိုကို အရင်ဒေါင်းမယ်
                 if not os.path.exists(target):
-                    print(f"📥 Downloading from: {source_value[:15]}...")
-                    
+                    print(f"📥 Downloading source...")
                     if source_value.startswith('BAACAg'):
-                        # အကယ်၍ file_id နဲ့ တိုက်ရိုက်မရရင် Message Link လား စစ်မယ်
-                        try:
-                            await client.download_media(source_value, target)
-                        except Exception as e:
-                            print(f"⚠️ Direct ID download failed: {e}")
-                            # နောက်တစ်နည်း: Link ကနေ ဒေါင်းဖို့ ကြိုးစားမယ် (မိတ်ဆွေ Bot ဆီ Forward လုပ်ထားရင် ရမယ်)
-                            raise Exception("Telegram access denied for this File ID.")
+                        await client.download_media(source_value, target)
                     else:
-                        # YouTube, Drive or Direct Link
-                        subprocess.run(['yt-dlp', '-f', 'b[ext=mp4]/best', '--no-check-certificate', '-o', target, source_value], check=True)
+                        real_url = resolve_url(source_value)
+                        subprocess.run(['yt-dlp', '-f', 'b[ext=mp4]/best', '--no-check-certificate', '-o', target, real_url], check=True)
 
                 if os.path.exists(target):
-                    print(f"✅ Downloaded ({os.path.getsize(target)/1024/1024:.1f}MB)")
-                    
-                    # ၂။ ဖြတ်မယ် (FFmpeg)
+                    # ၂။ အပိုင်းပိုင်းဖြတ်မယ် (Part 1 ကနေ စမယ်)
+                    print("✂️ Splitting video...")
                     split_s = int(data.get('len', 5)) * 60
                     subprocess.run(['ffmpeg', '-y', '-i', target, '-c', 'copy', '-f', 'segment', '-segment_start_number', '1', '-segment_time', str(split_s), '-reset_timestamps', '1', 'p_%d.mp4'], check=True)
                     if os.path.exists(target): os.remove(target)
 
-                    # ၃။ ပို့မယ်
-                    parts = sorted([f for f in os.listdir('.') if f.startswith('p_')], key=lambda x: int(re.search(rr'\d+', x).group()))
+                    # ၃။ ဖိုင်တွေကို နံပါတ်စဉ်အလိုက် စီမယ်
+                    parts = [f for f in os.listdir('.') if f.startswith('p_') and f.endswith('.mp4')]
+                    # Syntax Error ပြင်ဆင်ပြီးသား Line:
+                    parts.sort(key=lambda x: int(re.search(r'\d+', x).group()))
+                    total_parts = len(parts)
+
                     for p in parts:
                         num = int(re.search(r'\d+', p).group())
-                        if num <= data.get('last_sent_index', -1):
-                            os.remove(p); continue
                         
+                        # ပို့ပြီးသားလား စစ်မယ်
+                        if num <= last_sent:
+                            if os.path.exists(p): os.remove(p)
+                            continue
+                        
+                        print(f"⚙️ Processing Part {num}/{total_parts}...")
                         out = f"final_{num}.mp4"
                         wm = data.get('wm', '')
+                        
                         if wm:
                             vf = f"drawtext=text='{wm}':fontcolor=white@0.6:fontsize=h/15:x='if(gte(t,0),mod(t*100,w),0)':y='(h-text_h)/2 + sin(t)*100'"
                             subprocess.run(['ffmpeg', '-y', '-i', p, '-vf', vf, '-c:v', 'libx264', '-crf', '23', '-c:a', 'copy', out], check=True)
                         else:
                             os.rename(p, out)
                         
-                        await client.send_file(target_uid, out, caption=f"{data.get('name')} Part {num}", supports_streaming=True)
-                        task_ref.update({'last_sent_index': num})
-                        os.remove(out); os.remove(p)
+                        if os.path.exists(out):
+                            cap = f"{data.get('name')} Part {num}"
+                            if num == total_parts: cap += " (End Part) ✅"
+                            
+                            # User ဆီ အရောက်ပို့မယ်
+                            await client.send_file(target_uid, out, caption=cap, supports_streaming=True)
+                            
+                            # Database Update လုပ်ပြီး ဖိုင်ဖျက်မယ်
+                            task_ref.update({'last_sent_index': num})
+                            os.remove(out)
+                        if os.path.exists(p): os.remove(p)
 
                     task_ref.update({'status': 'completed'})
+                    print(f"✅ Mission Success for {target_uid}")
                 else:
                     task_ref.update({'status': 'failed'})
 
