@@ -1,23 +1,28 @@
 name: Video Processor
 on:
   schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
+    - cron: '*/5 * * * *' # ၅ မိနစ်တစ်ခါ check မယ် (သေသွားရင် ပြန်နိုးဖို့)
+  workflow_dispatch:      # ကိုယ်တိုင် manual run ချင်ရင်
   push:
-    branches: [ main ]
+    branches: [ main ]    # code အသစ်တင်ရင် run မယ်
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 360  # <--- ဒါ အရေးကြီးဆုံး (၆ နာရီအထိ ခွင့်ပြုမယ်)
+    
     steps:
       - uses: actions/checkout@v3
+      
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+          
       - name: Install Tools
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
           pip install pyrogram tgcrypto firebase-admin requests yt-dlp
+          
       - name: Run Worker
         run: python bot.py
         env:
