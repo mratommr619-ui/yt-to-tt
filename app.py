@@ -29,11 +29,11 @@ try:
         if cred_json:
             firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
             db = firestore.client()
-except Exception as e: print(f"Firebase Error: {e}")
+except Exception as e: print(f"Firebase Connection Error: {e}")
 
 app = Client("interface_bot", api_id=int(os.environ.get("API_ID")), api_hash=os.environ.get("API_HASH"), bot_token=os.environ.get("TELEGRAM_TOKEN"))
 
-# --- [Admin & Settings] ---
+# --- [Admin & Payments] ---
 ADMIN_ID = 1715890141 
 KPAY_NO = "09695616591"
 USDT_ADDRESS = "0x56824c51be35937da7E60a6223E82cD1795984cC"
@@ -42,23 +42,21 @@ TEXTS = {
     'my': {
         'start': "👋 **မင်္ဂလာပါ Movie Spliter Bot မှ ကြိုဆိုပါတယ်**\n\nရှေ့ဆက်ရန် ဘာသာစကား ရွေးချယ်ပေးပါ။",
         'intro': (
-            "🚀 **ဒီ Bot က ဘာတွေလုပ်ပေးနိုင်သလဲ?**\n\n"
-            "🎬 **Video Splitting:** ဗီဒီယိုအရှည်ကြီးတွေကို မိနစ်အလိုက် စနစ်တကျ အပိုင်းဖြတ်ပေးခြင်း။\n"
-            "🔗 **Link Support:** Drive, Bilibili, Facebook, TikTok Link တွေကို တိုက်ရိုက်ဒေါင်းပြီး အပိုင်းဖြတ်ပေးခြင်း။\n"
-            "📝 **Watermark:** ကိုယ်ပိုင်စာသား Watermark များကို ဗီဒီယိုပေါ်တွင် ထည့်သွင်းပေးခြင်း။\n"
-            "⚡ **High Speed:** အချိန်တိုအတွင်း အပိုင်းများကို အမြန်ဆုံးပြန်ပို့ပေးခြင်း။\n\n"
+            "🚀 **Professional Video Splitter Bot**\n\n"
+            "ဒီ Bot က သင့်အတွက် ဘာတွေလုပ်ပေးနိုင်မလဲ?\n"
+            "✅ **Fast Splitting:** ဗီဒီယိုအရှည်ကြီးတွေကို မိနစ်အလိုက် အမြန်ဆုံး ဖြတ်ပေးခြင်း။\n"
+            "✅ **Link Support:** Drive, TikTok, FB, Bilibili Link များကို တိုက်ရိုက်ဒေါင်းပြီး အပိုင်းဖြတ်ပေးခြင်း။\n"
+            "✅ **Watermark:** ကိုယ်ပိုင်စာသား Watermark ကို ဗီဒီယိုမှာ ထည့်သွင်းပေးခြင်း။\n"
+            "✅ **HD Quality:** ဗီဒီယို အရည်အသွေး မကျဘဲ စနစ်တကျ အပိုင်းခွဲပေးခြင်း။\n\n"
             "👇 **အခုပဲ ဗီဒီယိုဖိုင် (သို့) Link တစ်ခုခု ပို့ပြီး စမ်းသပ်ကြည့်လိုက်ပါ!**"
         ),
         'ask_name': "📝 **Movie Name ပေးပါ** (ကျော်ရန် /skip)",
         'ask_len': "⏱ **ဘယ်နှစ်မိနစ်စီ ဖြတ်မလဲ?** (ဥပမာ - 5)",
         'ask_wm': "📝 **Watermark စာသားပေးပါ** (ကျော်ရန် /skip)",
-        'done': "⏳ **လက်ခံရရှိပါပြီ**။ အပိုင်းများ မကြာမီ ပြန်ပို့ပေးပါမည်။",
+        'done': "⏳ **လက်ခံရရှိပါပြီ**။ အပိုင်းများ ပြန်ပို့ပေးပါမည်။",
         'expired': (
-            "⚠️ **သင့်ရဲ့ ၁ ရက် Trial သက်တမ်း ကုန်ဆုံးသွားပါပြီ**\n\n"
-            "💰 **Premium Price:** ၃၀၀၀ ကျပ် / 1.0 USDT\n"
-            f"💳 **KPay/AYA:** `{KPAY_NO}`\n"
-            f"🌐 **USDT:** `{USDT_ADDRESS}`\n\n"
-            "ငွေလွှဲပြီး Screenshot ပုံကို ပို့ပေးပါ။"
+            "⚠️ **သင့်ရဲ့ ၁ ရက် Trial သက်တမ်း ကုန်ဆုံးသွားပါပြီ**\n\n💰 **Premium:** ၃၀၀၀ ကျပ် / 1.0 USDT\n"
+            f"💳 **KPay:** `{KPAY_NO}`\n🌐 **USDT:** `{USDT_ADDRESS}`"
         )
     },
     'en': {
@@ -68,7 +66,7 @@ TEXTS = {
         'ask_len': "⏱ **Minutes per part?**",
         'ask_wm': "📝 **Watermark text?**",
         'done': "⏳ **Received!** Processing...",
-        'expired': "⚠️ Trial Expired! Please pay to continue."
+        'expired': "⚠️ Your 1-day Trial has Expired!"
     }
 }
 
@@ -101,6 +99,7 @@ async def main_handler(c, m):
     if datetime.now() > datetime.strptime(u_doc['expiry_date'], "%Y-%m-%d %H:%M:%S"):
         await m.reply_text(TEXTS[lang]['expired']); return
 
+    # Media Check
     is_media = m.video or (m.document and m.document.mime_type and "video" in m.document.mime_type)
     link = re.findall(r'https?://[^\s]+', m.text)[0] if m.text and re.findall(r'https?://[^\s]+', m.text) else None
 
@@ -110,6 +109,7 @@ async def main_handler(c, m):
         await m.reply_text(TEXTS[lang]['ask_name'])
         return
 
+    # Step Flow
     if m.text and step != 'idle':
         if step == 'name':
             u_ref.update({'temp_name': "Movie" if m.text == "/skip" else m.text, 'step': 'len'})
