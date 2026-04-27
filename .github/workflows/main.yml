@@ -21,7 +21,7 @@ jobs:
       - name: Install Tools
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install pyrogram tgcrypto firebase-admin requests yt-dlp
+          pip install telethon firebase-admin yt-dlp
           
       - name: Run Worker
         run: python bot.py
