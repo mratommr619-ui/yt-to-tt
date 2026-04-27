@@ -1,28 +1,34 @@
 name: Video Processor
+
 on:
   schedule:
-    - cron: '*/5 * * * *' # ၅ မိနစ်တစ်ခါ check မယ် (သေသွားရင် ပြန်နိုးဖို့)
-  workflow_dispatch:      # ကိုယ်တိုင် manual run ချင်ရင်
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
   push:
-    branches: [ main ]    # code အသစ်တင်ရင် run မယ်
+    branches: [ main ]
+
+# ဒီအပိုင်းက IP Error မတက်အောင် အဟောင်းကို သတ်ပေးမယ့်ကောင်
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # <--- ဒါ အရေးကြီးဆုံး (၆ နာရီအထိ ခွင့်ပြုမယ်)
-    
+    timeout-minutes: 360  # ၆ နာရီအထိ ခွင့်ပြုထားတယ်
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-          
+
       - name: Install Tools
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
           pip install telethon firebase-admin yt-dlp
-          
+
       - name: Run Worker
         run: python bot.py
         env:
@@ -30,4 +36,4 @@ jobs:
           API_HASH: ${{ secrets.API_HASH }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          SESSION_STRING: ${{ secrets.SESSION_STRING }} # <--- ဒါပါမှ ကုဒ်က String ကို ဖတ်နိုင်မှာပါ
+          SESSION_STRING: ${{ secrets.SESSION_STRING }}
