@@ -14,14 +14,14 @@ TEXTS = {
     'en': {
         'start_dl': "📥 Downloading your video, please wait...",
         'dl_fail': "❌ Download failed. The link might be broken or private.",
-        'sending': "📤 Sending Part {num}...",
+        'sending': "📤 Send Part {num}...",
         'end_part': " (End Part) ✅",
         'error': "❌ An error occurred: "
     },
     'my': {
         'start_dl': "📥 ဗီဒီယိုကို ဒေါင်းလုဒ်ဆွဲနေပါတယ်၊ ခဏစောင့်ပေးပါ...",
         'dl_fail': "❌ ဒေါင်းလုဒ်ဆွဲလို့ မရပါဘူး။ Link ပျက်နေတာ (သို့) Private ဖြစ်နေတာ ဖြစ်နိုင်ပါတယ်။",
-        'sending': "📤 အပိုင်း {num} ကို ပို့နေပါတယ်...",
+        'sending': "📤 အပိုင်း {num} ကို ပို့ပါပြီ...",
         'end_part': " (ဇာတ်သိမ်းပိုင်း) ✅",
         'error': "❌ အမှားတစ်ခု ဖြစ်သွားပါတယ်: "
     }
