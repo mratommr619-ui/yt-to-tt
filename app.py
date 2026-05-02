@@ -5,7 +5,7 @@ from firebase_admin import credentials, firestore
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, WebAppInfo
 
-# --- [Render Anti-Sleep] ---
+# --- [Render Anti-Sleep Logic] ---
 def keep_alive():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     while True:
@@ -32,7 +32,7 @@ db = firestore.client()
 
 app = Client("interface_bot", api_id=int(os.environ.get("API_ID")), api_hash=os.environ.get("API_HASH"), bot_token=os.environ.get("TELEGRAM_TOKEN"))
 
-WEB_APP_URL = "https://your-project.web.app" # Firebase Hosting URL
+WEB_APP_URL = "https://your-project.web.app" 
 ADMIN_ID = 1715890141 
 BEP20_ADDR = "0x56824c51be35937da7E60a6223E82cD1795984cC"
 
