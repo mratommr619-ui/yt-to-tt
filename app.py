@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, firestore
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, WebAppInfo
 
 # --- [Render Anti-Sleep] ---
 def keep_alive():
@@ -25,152 +25,89 @@ threading.Thread(target=run_dummy_server, daemon=True).start()
 threading.Thread(target=keep_alive, daemon=True).start()
 
 # --- [Firebase Connection] ---
-db = None
-try:
-    if not firebase_admin._apps:
-        cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
-        if cred_json:
-            firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
-            db = firestore.client()
-except Exception as e: print(f"Firebase Error: {e}")
+if not firebase_admin._apps:
+    cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+    firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
+db = firestore.client()
 
 app = Client("interface_bot", api_id=int(os.environ.get("API_ID")), api_hash=os.environ.get("API_HASH"), bot_token=os.environ.get("TELEGRAM_TOKEN"))
 
-# --- [Settings & Payments] ---
+WEB_APP_URL = "https://your-project.web.app" # Firebase Hosting URL
 ADMIN_ID = 1715890141 
-KPAY_NO = "09695616591"
-AYAPAY_NO = "09695616591"
-USDT_ADDRESS = "0x56824c51be35937da7E60a6223E82cD1795984cC"
-PRICE_MMK = "3000 ကျပ်"
-PRICE_USDT = "1.0 USDT"
+BEP20_ADDR = "0x56824c51be35937da7E60a6223E82cD1795984cC"
 
 TEXTS = {
     'my': {
-        'start': "👋 **မင်္ဂလာပါ Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
-        'intro': (
-            "🚀 **Professional Video Splitter Bot**\n\n"
-            "✅ **Fast Splitting:** ဗီဒီယိုများကို မိနစ်အလိုက် အမြန်ဖြတ်ပေးခြင်း။\n"
-            "🔗 **Link Support:** Drive, TikTok, FB, Bilibili Link များကို တိုက်ရိုက်ဒေါင်းပေးခြင်း။\n"
-            "📝 **Marquee Watermark:** စခရင်အနှံ့ ပတ်ပြေးနေသော Watermark ထည့်သွင်းပေးခြင်း။\n\n"
-            "👇 **ဗီဒီယိုဖိုင် (သို့) Link တစ်ခုခု ပို့ပြီး စမ်းသပ်ကြည့်ပါ!**"
-        ),
-        'profile': "👤 **ကျွန်ုပ်၏ ပရိုဖိုင်**\n\n🆔 **User ID:** `{uid}`\n🌟 **အဆင့်:** {status}\n📅 **သက်တမ်းကုန်ဆုံးရက်:** `{exp}`",
-        'expired': (
-            "⚠️ **သင့်ရဲ့ Trial (သို့) Premium သက်တမ်း ကုန်ဆုံးသွားပါပြီ**\n\n"
-            "ဆက်လက်အသုံးပြုလိုပါက Premium ဝယ်ယူနိုင်ပါတယ်။\n\n"
-            f"💰 **၁ လ ဈေးနှုန်း:** {PRICE_MMK} / {PRICE_USDT}\n"
-            f"💳 **KPay:** `{KPAY_NO}`\n"
-            f"💳 **AYAPay:** `{AYAPAY_NO}`\n"
-            f"🌐 **USDT (TRC20):** `{USDT_ADDRESS}`\n\n"
-            "⚠️ **အရေးကြီး:** ငွေလွှဲရည်ညွှန်းချက် (Note) တွင် သင့် ID `{uid}` ကို ထည့်သွင်းပေးပါ။\n\n"
-            "✅ ငွေလွှဲပြီးပါက Screenshot ပို့ပေးပါ။"
-        ),
-        'ask_name': "📝 **Movie Name ပေးပါ** (ကျော်ရန် /skip)",
-        'ask_len': "⏱ **ဘယ်နှစ်မိနစ်စီ ဖြတ်မလဲ?** (ဥပမာ - 5)",
-        'ask_wm': "📝 **Watermark စာသားပေးပါ** (ကျော်ရန် /skip)",
-        'done': "⏳ **လက်ခံရရှိပါပြီ**။ အပိုင်းများ မကြာမီ ပြန်ပို့ပေးပါမည်။"
+        'intro': "👋 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
+        'open_app': "🚀 Mini App ကိုဖွင့်ပါ",
+        'profile_btn': "👤 ကျွန်ုပ်၏ ပရိုဖိုင်",
+        'buy_btn': "💎 Premium ဝယ်ယူရန်",
+        'profile_text': "🆔 **ID:** `{uid}`\n🌟 **အဆင့်:** {status}\n📅 **ကုန်ဆုံးရက်:** {exp}",
+        'payment': f"💎 **Premium Upgrade**\n\n💰 **၁ လ:** 3000 ကျပ် / 1.2 USDT\n💳 **KPay:** `09695616591`\n🌐 **BEP20:** `{BEP20_ADDR}`\n⚠️ **Note:** ID `{uid}` ကို ထည့်ပါ။",
+        'premium_success': "🎉 သင် Premium ဖြစ်သွားပါပြီ။\n📅 ကုန်ဆုံးရက်: `{exp}`"
     },
     'en': {
-        'start': "👋 **Welcome to Movie Spliter Bot**",
-        'intro': (
-            "🚀 **Professional Video Splitter Bot**\n\n"
-            "✅ **Fast Splitting:** Cut videos into parts instantly.\n"
-            "🔗 **Link Support:** Drive, TikTok, FB, Bilibili direct download.\n"
-            "📝 **Marquee Watermark:** Moving watermark across the screen.\n\n"
-            "👇 **Send a Video or Link now!**"
-        ),
-        'profile': "👤 **My Profile**\n\n🆔 **User ID:** `{uid}`\n🌟 **Status:** {status}\n📅 **Expiry Date:** `{exp}`",
-        'expired': (
-            "⚠️ **Your Trial or Premium membership has expired!**\n\n"
-            "Upgrade to Premium to continue.\n\n"
-            f"💰 **Price:** {PRICE_MMK} / {PRICE_USDT}\n"
-            f"💳 **KPay:** `{KPAY_NO}`\n"
-            f"💳 **AYAPay:** `{AYAPAY_NO}`\n"
-            f"🌐 **USDT (TRC20):** `{USDT_ADDRESS}`\n\n"
-            "⚠️ **IMPORTANT:** Include your ID `{uid}` in payment note.\n\n"
-            "✅ Send a Screenshot after payment."
-        ),
-        'ask_name': "📝 **Enter Movie Name** (Or /skip)",
-        'ask_len': "⏱ **Minutes per part?**",
-        'ask_wm': "📝 **Enter Watermark** (Or /skip)",
-        'done': "⏳ **Received!** Processing..."
+        'intro': "👋 **Welcome to Movie Spliter Bot**",
+        'open_app': "🚀 Open Mini App",
+        'profile_btn': "👤 My Profile",
+        'buy_btn': "💎 Buy Premium",
+        'profile_text': "🆔 **ID:** `{uid}`\n🌟 **Status:** {status}\n📅 **Expiry:** {exp}",
+        'payment': f"💎 **Premium Upgrade**\n\n💰 **Price:** 3000 MMK / 1.2 USDT\n💳 **Pay:** `09695616591`\n🌐 **BEP20:** `{BEP20_ADDR}`\n⚠️ **Note:** Include ID `{uid}`.",
+        'premium_success': "🎉 You are now Premium!\n📅 Expiry: `{exp}`"
     }
 }
 
+def get_user_status(uid):
+    u_doc = db.collection('users').document(uid).get().to_dict()
+    if not u_doc: return "Free", "N/A", "my"
+    exp_str = u_doc.get('expiry_date', 'N/A')
+    lang = u_doc.get('lang', 'my')
+    if exp_str != "N/A" and datetime.now() > datetime.strptime(exp_str, "%Y-%m-%d %H:%M:%S"):
+        db.collection('users').document(uid).update({'is_premium': False, 'expiry_date': 'N/A'})
+        return "Free", "N/A", lang
+    return ("Premium 🌟" if u_doc.get('is_premium') else "Free"), exp_str, lang
+
 @app.on_message(filters.command("start") & filters.private)
 async def start_cmd(c, m):
-    kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🇲🇲 မြန်မာစာ", callback_data="lang_my"),
-        InlineKeyboardButton("🇺🇸 English", callback_data="lang_en")
-    ]])
-    await m.reply_text(TEXTS['my']['start'], reply_markup=kb)
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🇲🇲 မြန်မာစာ", callback_data="lang_my"), InlineKeyboardButton("🇺🇸 English", callback_data="lang_en")]])
+    await m.reply_text("Choose Language / ဘာသာစကားရွေးပါ", reply_markup=kb)
 
 @app.on_callback_query(filters.regex("^lang_"))
 async def set_lang(c, q):
     lang, uid = q.data.split("_")[1], str(q.from_user.id)
     u_ref = db.collection('users').document(uid)
-    expiry = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
     if not u_ref.get().exists:
-        u_ref.set({'lang': lang, 'expiry_date': expiry, 'step': 'idle', 'is_premium': False})
-    else: u_ref.update({'lang': lang, 'step': 'idle'})
-    
-    p_text = "👤 My Profile" if lang == 'en' else "👤 ကျွန်ုပ်၏ ပရိုဖိုင်"
+        u_ref.set({'lang': lang, 'expiry_date': 'N/A', 'is_premium': False})
+    else: u_ref.update({'lang': lang})
+    kb = ReplyKeyboardMarkup([[TEXTS[lang]['open_app']], [TEXTS[lang]['profile_btn'], TEXTS[lang]['buy_btn']]], resize_keyboard=True)
     await q.message.delete()
-    await c.send_message(uid, TEXTS[lang]['intro'], reply_markup=ReplyKeyboardMarkup([[p_text]], resize_keyboard=True))
+    await c.send_message(uid, TEXTS[lang]['intro'], reply_markup=kb)
 
-@app.on_message(filters.regex("^(👤 My Profile|👤 ကျွန်ုပ်၏ ပရိုဖိုင်)") & filters.private)
-async def my_profile(c, m):
+@app.on_message(filters.regex("^(👤|👤 My Profile|👤 ကျွန်ုပ်၏ ပရိုဖိုင်)") & filters.private)
+async def show_profile(c, m):
     uid = str(m.from_user.id)
-    u_doc = db.collection('users').document(uid).get().to_dict()
-    lang = u_doc.get('lang', 'my')
-    status = "Premium 🌟" if u_doc.get('is_premium') else "Trial Member"
-    await m.reply_text(TEXTS[lang]['profile'].format(uid=uid, status=status, exp=u_doc['expiry_date']))
+    status, exp, lang = get_user_status(uid)
+    await m.reply_text(TEXTS[lang]['profile_text'].format(uid=uid, status=status, exp=exp))
+
+@app.on_message(filters.regex("^(💎|💎 Buy Premium|💎 Premium ဝယ်ယူရန်)") & filters.private)
+async def show_payment(c, m):
+    uid = str(m.from_user.id)
+    u = db.collection('users').document(uid).get().to_dict()
+    await m.reply_text(TEXTS[u.get('lang', 'my')]['payment'].format(uid=uid))
 
 @app.on_message(filters.photo & filters.private)
 async def handle_ss(c, m):
     await m.forward(ADMIN_ID)
-    await c.send_message(ADMIN_ID, f"💰 **Payment SS from UID:** `{m.from_user.id}`")
-    await m.reply_text("✅ Screenshot လက်ခံရရှိပါသည်။ / Received.")
+    await c.send_message(ADMIN_ID, f"💰 **Payment SS**\nUID: `{m.from_user.id}`\nApprove: `/set_premium {m.from_user.id} 30`")
+    await m.reply_text("✅ Sent to Admin.")
 
-@app.on_message(filters.private)
-async def main_handler(c, m):
-    if not db or not m.from_user: return
-    uid = str(m.from_user.id)
-    u_ref = db.collection('users').document(uid)
-    u_snap = u_ref.get()
-    if not u_snap.exists: return
-    u_doc = u_snap.to_dict()
-    lang, step = u_doc.get('lang', 'my'), u_doc.get('step', 'idle')
-
-    if datetime.now() > datetime.strptime(u_doc['expiry_date'], "%Y-%m-%d %H:%M:%S"):
-        await m.reply_text(TEXTS[lang]['expired'].format(uid=uid)); return
-
-    is_media = m.video or (m.document and m.document.mime_type and "video" in m.document.mime_type)
-    link = re.findall(r'https?://[^\s]+', m.text)[0] if m.text and re.findall(r'https?://[^\s]+', m.text) else None
-
-    if (is_media or link) and not (m.text and m.text.startswith("/")):
-        val = m.video.file_id if m.video else (m.document.file_id if m.document else link)
-        u_ref.update({'step': 'name', 'temp_type': 'video' if is_media else 'link', 'temp_val': val})
-        await m.reply_text(TEXTS[lang]['ask_name'])
-        return
-
-    if m.text and step != 'idle':
-        if step == 'name':
-            u_ref.update({'temp_name': "Movie" if m.text == "/skip" else m.text, 'step': 'len'})
-            await m.reply_text(TEXTS[lang]['ask_len'])
-        elif step == 'len':
-            try:
-                u_ref.update({'temp_len': 5 if m.text == "/skip" else int(m.text), 'step': 'wm'})
-                await m.reply_text(TEXTS[lang]['ask_wm'])
-            except: await m.reply_text("Numbers only / ဂဏန်းရိုက်ပါ")
-        elif step == 'wm':
-            wm = "" if m.text == "/skip" else m.text
-            db.collection('tasks').add({
-                'user_id': uid, 'type': u_doc['temp_type'], 'value': u_doc['temp_val'],
-                'name': u_doc['temp_name'], 'len': u_doc['temp_len'], 'wm': wm,
-                'status': 'pending', 'last_sent_index': -1, 'createdAt': firestore.SERVER_TIMESTAMP
-            })
-            u_ref.update({'step': 'idle'})
-            await m.reply_text(TEXTS[lang]['done'])
+@app.on_message(filters.command("set_premium") & filters.user(ADMIN_ID))
+async def admin_set(c, m):
+    _, target_id, days = m.text.split()
+    exp = (datetime.now() + timedelta(days=int(days))).strftime("%Y-%m-%d %H:%M:%S")
+    db.collection('users').document(target_id).update({'is_premium': True, 'expiry_date': exp})
+    u = db.collection('users').document(target_id).get().to_dict()
+    await c.send_message(int(target_id), TEXTS[u.get('lang', 'my')]['premium_success'].format(exp=exp))
+    await m.reply_text(f"✅ Success! {target_id} is now Premium.")
 
 app.run()
