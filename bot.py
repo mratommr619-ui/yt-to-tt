@@ -1,4 +1,4 @@
-import os, json, asyncio, subprocess, firebase_admin, time, re, base64
+import os, base64, subprocess, asyncio, firebase_admin, json, re
 from firebase_admin import credentials, firestore
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -8,82 +8,46 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
 db = firestore.client()
 
-TEXTS = {
-    'en': {'send': "📤 Part {num}...", 'end': " (End Part) ✅"},
-    'my': {'send': "📤 အပိုင်း {num} ပို့နေပါတယ်...", 'end': " (ဇာတ်သိမ်းပိုင်း) ✅"}
-}
-
-def parse_duration(val):
-    try:
-        if ':' in str(val):
-            m, s = map(float, str(val).split(':'))
-            return int(m * 60 + s)
-        return int(float(val) * 60)
-    except: return 300
-
 async def worker():
-    client = TelegramClient(StringSession(os.environ.get("SESSION_STRING")), int(os.environ.get("API_ID")), os.environ.get("API_HASH"))
+    client = TelegramClient(StringSession(os.environ.get("SESSION_STRING")), 36969505, "f129bfcfe08725b285d2a1938fc18380")
     await client.connect()
     
-    async with client:
-        print("🚀 Worker Engine Started...")
-        while True:
-            tasks = db.collection('tasks').where("status", "in", ["pending", "processing"])\
-                      .order_by("isPremium", direction=firestore.Query.DESCENDING)\
-                      .order_by("createdAt", direction=firestore.Query.ASCENDING).limit(1).get()
+    while True:
+        tasks = db.collection('tasks').where("status", "in", ["pending", "processing"]).limit(1).get()
+        if not tasks: await asyncio.sleep(15); continue
+        
+        doc = tasks[0]; data = doc.to_dict(); ref = doc.reference
+        uid = int(data['user_id']); lang = data.get('lang', 'my')
+        
+        try:
+            ref.update({'status': 'processing'})
+            m_name = data.get('name', 'movie')
+            wm_text = data.get('wm', '')
+            duration_sec = sum(int(x) * 60**i for i, x in enumerate(reversed(data.get('len', '5:00').split(':'))))
+
+            subprocess.run(['yt-dlp', '-f', 'b[ext=mp4]', '-o', 'vid.mp4', data['value']], check=True)
+
+            moving_logic = "x='if(lt(mod(t,10),5),w*0.1,w*0.7)':y='if(lt(mod(t,6),3),h*0.1,h*0.8)'"
+            filters = []
+            if wm_text: filters.append(f"drawtext=text='{wm_text}':{moving_logic}:fontcolor=white@0.5:fontsize=30")
+            if data.get('logo_data'):
+                pos_map = {"tr": "W-w-15:15", "tl": "15:15", "br": "W-w-15:H-h-15", "bl": "15:H-h-15"}
+                with open("logo.png", "wb") as f: f.write(base64.b64decode(data['logo_data'].split(",")[1]))
+                filters.append(f"movie=logo.png[logo];[v][logo]overlay={pos_map[data['pos']]}")
+
+            os.makedirs("parts", exist_ok=True)
+            subprocess.run(['ffmpeg', '-y', '-i', 'vid.mp4', '-vf', ",".join(filters) if filters else "copy", 
+                            '-f', 'segment', '-segment_time', str(duration_sec), '-reset_timestamps', '1', 'parts/p_%d.mp4'], check=True)
             
-            if not tasks: await asyncio.sleep(15); continue
-            
-            doc = tasks[0]; data = doc.to_dict(); task_ref = doc.reference
-            uid = int(data['user_id'])
-            t = TEXTS.get(data.get('lang', 'my'), TEXTS['my'])
-            
-            try:
-                task_ref.update({'status': 'processing'})
-                file = "vid.mp4"
-                subprocess.run(['yt-dlp', '-f', 'b[ext=mp4]/best', '-o', file, data['value']], check=True)
+            parts = sorted([f for f in os.listdir("parts")])
+            for idx, p in enumerate(parts):
+                caption = f"🎬 {m_name} - Part {idx+1}"
+                if idx + 1 == len(parts):
+                    caption += " (ဇာတ်သိမ်းပိုင်း) ✅" if lang == 'my' else " (End Part) ✅"
+                await client.send_file(uid, f"parts/{p}", caption=caption)
+                ref.update({'last_sent_index': idx})
 
-                dur = parse_duration(data.get('len', '5:00'))
-                os.makedirs("parts", exist_ok=True)
-                subprocess.run(['ffmpeg', '-y', '-i', file, '-f', 'segment', '-segment_time', str(dur), '-reset_timestamps', '1', 'parts/p_%d.mp4'], check=True)
+            ref.delete()
+        except: ref.update({'status': 'pending'})
 
-                logo_file = "logo.png"
-                has_logo = False
-                if data.get('logo_data'):
-                    header, encoded = data['logo_data'].split(",", 1)
-                    with open(logo_file, "wb") as f: f.write(base64.b64decode(encoded))
-                    has_logo = True
-
-                all_parts = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")], key=lambda x: int(re.search(r'\d+', x).group()))
-                total = len(all_parts)
-
-                for idx, p in enumerate(all_parts):
-                    num = idx + 1
-                    if num <= data.get('last_sent_index', -1): continue # Resume logic
-                    
-                    out = f"f_{num}.mp4"
-                    filters = []
-                    if has_logo:
-                        pos = {"tr": "W-w-10:10", "tl": "10:10", "br": "W-w-10:H-h-10", "bl": "10:H-h-10"}[data['pos']]
-                        filters.append(f"movie={logo_file},format=rgba,colorchannelmixer=aa={data['vis']} [l]; [in][l] overlay={pos}")
-                    if data.get('wm'):
-                        filters.append(f"drawtext=text='{data['wm']}':fontcolor=white@0.4:fontsize=h/20:x='mod(t*100,w)':y='h-th-10'")
-
-                    vf = ",".join(filters)
-                    cmd = ['ffmpeg', '-y', '-i', f"parts/{p}"]
-                    if vf: cmd += ['-vf', vf, '-c:v', 'libx264', '-crf', '23', out]
-                    else: cmd += ['-c', 'copy', out]
-                    
-                    subprocess.run(cmd, check=True)
-                    caption = f"{data.get('name')} {t['send'].format(num=num)}"
-                    if num == total: caption += t['end']
-                    
-                    await client.send_file(uid, out, caption=caption, supports_streaming=True)
-                    task_ref.update({'last_sent_index': num})
-                    os.remove(out)
-
-                task_ref.delete()
-                for f in os.listdir("parts"): os.remove(f"parts/{f}")
-            except: task_ref.update({'status': 'pending'}); await asyncio.sleep(10)
-
-if __name__ == "__main__": asyncio.run(worker())
+asyncio.run(worker())
