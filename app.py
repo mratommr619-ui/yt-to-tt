@@ -27,13 +27,13 @@ TEXTS = {
     'my': {
         'intro': "🎬 **Welcome to Movie Spliter Bot**",
         'open': "🚀 Mini App ဖွင့်ပါ", 'profile': "👤 Profile", 'buy': "💎 Premium ဝယ်ရန်",
-        'payment': "💎 **Premium Upgrade**\n\n💰 **၁ လ:** 3000 ကျပ် / 1.0 USDT\n💳 **KPay/AYA:** `09695616591`\n🌐 **BEP20:** `0x56824c51be35937da7E60a6223E82cD1795984cC`",
+        'payment': "💎 **Premium Upgrade**\n\n💰 **၁ လ:** 3000 ကျပ် / 1.0 USDT\n💳 **KPay/AYAPay:** `09695616591`\n🌐 **BEP20:** `0x56824c51be35937da7E60a6223E82cD1795984cC`",
         'success': "🎉 သင် Premium ဖြစ်သွားပါပြီ။\n📅 ကုန်ဆုံးရက်: `{exp}`"
     },
     'en': {
         'intro': "🎬 **Welcome to Movie Spliter Bot**",
         'open': "🚀 Open Mini App", 'profile': "👤 Profile", 'buy': "💎 Buy Premium",
-        'payment': "💎 **Premium Upgrade**\n\n💰 **1 Month:** 3000 MMK / 1.0 USDT\n💳 **KPay/AYA:** `09695616591`\n🌐 **BEP20:** `0x56824c51be35937da7E60a6223E82cD1795984cC`",
+        'payment': "💎 **Premium Upgrade**\n\n💰 **1 Month:** 3000 MMK / 1.0 USDT\n💳 **KPay/AYAPay:** `09695616591`\n🌐 **BEP20:** `0x56824c51be35937da7E60a6223E82cD1795984cC`",
         'success': "🎉 You are now Premium!\n📅 Expiry: `{exp}`"
     }
 }
