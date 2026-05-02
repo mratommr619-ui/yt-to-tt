@@ -1,4 +1,4 @@
-import os, json, asyncio, subprocess, firebase_admin, time, re
+import os, json, asyncio, subprocess, firebase_admin, time, re, base64
 from firebase_admin import credentials, firestore
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -26,7 +26,7 @@ async def worker():
     await client.connect()
     
     async with client:
-        print("🚀 Worker Online...")
+        print("🚀 Worker Engine Started...")
         while True:
             tasks = db.collection('tasks').where("status", "in", ["pending", "processing"])\
                       .order_by("isPremium", direction=firestore.Query.DESCENDING)\
@@ -43,24 +43,27 @@ async def worker():
                 file = "vid.mp4"
                 subprocess.run(['yt-dlp', '-f', 'b[ext=mp4]/best', '-o', file, data['value']], check=True)
 
-                dur = parse_duration(data.get('len', '5'))
+                dur = parse_duration(data.get('len', '5:00'))
                 os.makedirs("parts", exist_ok=True)
                 subprocess.run(['ffmpeg', '-y', '-i', file, '-f', 'segment', '-segment_time', str(dur), '-reset_timestamps', '1', 'parts/p_%d.mp4'], check=True)
 
                 logo_file = "logo.png"
-                if data.get('logo'): subprocess.run(['curl', '-L', data['logo'], '-o', logo_file])
+                has_logo = False
+                if data.get('logo_data'):
+                    header, encoded = data['logo_data'].split(",", 1)
+                    with open(logo_file, "wb") as f: f.write(base64.b64decode(encoded))
+                    has_logo = True
 
                 all_parts = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")], key=lambda x: int(re.search(r'\d+', x).group()))
                 total = len(all_parts)
 
                 for idx, p in enumerate(all_parts):
                     num = idx + 1
-                    # --- [Auto-Resume Logic] ---
-                    if num <= data.get('last_sent_index', -1): continue
+                    if num <= data.get('last_sent_index', -1): continue # Resume logic
                     
                     out = f"f_{num}.mp4"
                     filters = []
-                    if data.get('logo'):
+                    if has_logo:
                         pos = {"tr": "W-w-10:10", "tl": "10:10", "br": "W-w-10:H-h-10", "bl": "10:H-h-10"}[data['pos']]
                         filters.append(f"movie={logo_file},format=rgba,colorchannelmixer=aa={data['vis']} [l]; [in][l] overlay={pos}")
                     if data.get('wm'):
@@ -68,18 +71,15 @@ async def worker():
 
                     vf = ",".join(filters)
                     cmd = ['ffmpeg', '-y', '-i', f"parts/{p}"]
-                    if vf: cmd += ['-vf', vf, '-c:v', 'libx264', '-crf', '23']
-                    else: cmd += ['-c', 'copy']
-                    cmd.append(out)
+                    if vf: cmd += ['-vf', vf, '-c:v', 'libx264', '-crf', '23', out]
+                    else: cmd += ['-c', 'copy', out]
                     
                     subprocess.run(cmd, check=True)
-
-                    # Caption Logic
                     caption = f"{data.get('name')} {t['send'].format(num=num)}"
-                    if num == total: caption += t['end'] # End Part Logic
+                    if num == total: caption += t['end']
                     
                     await client.send_file(uid, out, caption=caption, supports_streaming=True)
-                    task_ref.update({'last_sent_index': num}) # Firestore မှာ မှတ်ထားမယ်
+                    task_ref.update({'last_sent_index': num})
                     os.remove(out)
 
                 task_ref.delete()
