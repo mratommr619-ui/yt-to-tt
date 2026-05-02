@@ -1,4 +1,9 @@
-import os, json, http.server, threading, time, requests
+import os
+import json
+import http.server
+import threading
+import time
+import requests
 from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -11,21 +16,24 @@ from pyrogram.types import (
     WebAppInfo
 )
 
-# --- [အချက်အလက်များ - Direct Integration] ---
-API_ID = 36969505
-API_HASH = "f129bfcfe08725b285d2a1938fc18380"
-BOT_TOKEN = "8557322288:AAFAmQeE2T3IXTezumLomW6m-0f37qyR3I4"
-WEB_APP_URL = "https://yttott-28862.web.app"
-ADMIN_ID = 1715890141 
+# --- [ Environment Variables Setup ] ---
+# These are pulled from Render/GitHub environment settings
+API_ID = int(os.getenv("API_ID", "0"))
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://yttott-28862.web.app")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "1715890141"))
 
-# --- [Render Anti-Sleep Logic] ---
+# --- [ Render Anti-Sleep Logic ] ---
 def keep_alive():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     while True:
         try:
-            if url: requests.get(url, timeout=10)
-        except: pass
-        time.sleep(600)
+            if url:
+                requests.get(url, timeout=10)
+        except:
+            pass
+        time.sleep(600)  # Ping every 10 minutes
 
 def run_dummy_server():
     port = int(os.environ.get("PORT", 8080))
@@ -37,18 +45,22 @@ def run_dummy_server():
 threading.Thread(target=run_dummy_server, daemon=True).start()
 threading.Thread(target=keep_alive, daemon=True).start()
 
-# --- [Firebase Connection] ---
+# --- [ Firebase Connection ] ---
 if not firebase_admin._apps:
     try:
+        # Pull the entire Firebase JSON string from an environment variable
         cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
         if cred_json:
             firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
-    except Exception as e: print(f"Firebase Error: {e}")
+    except Exception as e:
+        print(f"Firebase Error: {e}")
 
 db = firestore.client()
+
+# --- [ Pyrogram Bot Setup ] ---
 app = Client("interface_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# --- [Language Texts] ---
+# --- [ Language Texts ] ---
 TEXTS = {
     'my': {
         'intro': "👋 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
@@ -72,7 +84,8 @@ TEXTS = {
 
 def get_user_status(uid):
     u_ref = db.collection('users').document(str(uid)).get()
-    if not u_ref.exists: return "Free", "N/A", "my"
+    if not u_ref.exists:
+        return "Free", "N/A", "my"
     u_doc = u_ref.to_dict()
     exp_str = u_doc.get('expiry_date', 'N/A')
     lang = u_doc.get('lang', 'my')
@@ -131,6 +144,8 @@ async def admin_set(c, m):
         _, _, lang = get_user_status(target_id)
         await c.send_message(int(target_id), TEXTS[lang]['premium_success'].format(exp=exp))
         await m.reply_text(f"✅ Success! {target_id} is Premium.")
-    except Exception as e: await m.reply_text(f"❌ Error: {e}")
+    except Exception as e:
+        await m.reply_text(f"❌ Error: {e}")
 
-app.run()
+if __name__ == "__main__":
+    app.run()
