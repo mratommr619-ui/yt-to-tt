@@ -36,16 +36,16 @@ TEXTS = {
     'my': {
         'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
         'open': "🚀 Mini App ဖွင့်ရန်",
-        'profile': "👤 My Profile",
+        'profile': "👤 ကျွန်ုပ်၏ ပရိုဖိုင်",
         'buy': "💎 Premium ဝယ်ရန်",
-        'payment': "💎 **Premium Upgrade**\n\n💰 **၁ လ:** 3000 ကျပ် / 1.0 USDT\n💳 **KPay:** `{kpay}`\n💳 **AYAPay:** `{ayapay}`\n🌐 **BEP20:** `{bep20}`\n⚠️ **Note:** ID `{uid}` ကို Screenshot နှင့်အတူ ပို့ပေးပါ။",
+        'payment': "💎 **Premium Upgrade** (Ads Free)\n\n💰 **၁ လ:** 3000 ကျပ် / 1.0 USDT\n💳 **KPay:** `{kpay}`\n💳 **AYAPay:** `{ayapay}`\n🌐 **BEP20:** `{bep20}`\n⚠️ **Note:** ID `{uid}` ကို Screenshot နှင့်အတူ ပို့ပေးပါ။",
     },
     'en': {
         'intro': "🎬 **Welcome to Movie Spliter Bot**",
         'open': "🚀 Open Mini App",
         'profile': "👤 My Profile",
         'buy': "💎 Buy Premium",
-        'payment': "💎 **Premium Upgrade**\n\n💰 **1 Month:** 3000 MMK / 1.0 USDT\n💳 **KPay:** `{kpay}`\n💳 **AYAPay:** `{ayapay}`\n🌐 **BEP20:** `{bep20}`\n⚠️ **Note:** Send ID `{uid}` with screenshot.",
+        'payment': "💎 **Premium Upgrade** (Ads Free)\n\n💰 **1 Month:** 3000 MMK / 1.0 USDT\n💳 **KPay:** `{kpay}`\n💳 **AYAPay:** `{ayapay}`\n🌐 **BEP20:** `{bep20}`\n⚠️ **Note:** Send ID `{uid}` with screenshot.",
     }
 }
 
