@@ -17,15 +17,19 @@ KPAY = "09695616591"
 AYAPAY = "09695616591"
 BEP20 = "0x56824c51be35937da7E60a6223E82cD1795984cC"
 
-# --- [ Firebase ] ---
+# --- [ Firebase Initialization ] ---
 if not firebase_admin._apps:
     try:
         cred_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
         if cred_json:
-            firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
-    except: pass
-db = firestore.client()
+            # Firebase JSON string ကို dictionary အဖြစ်ပြောင်းလဲခြင်း
+            firebase_dict = json.loads(cred_json)
+            firebase_admin.initialize_app(credentials.Certificate(firebase_dict))
+            print("Firebase Initialized Successfully.")
+    except Exception as e:
+        print(f"Firebase Init Error: {e}")
 
+db = firestore.client()
 app = Client("luxury_spliter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 TEXTS = {
@@ -34,14 +38,14 @@ TEXTS = {
         'open': "🚀 Mini App ဖွင့်ရန်",
         'profile': "👤 My Profile",
         'buy': "💎 Premium ဝယ်ရန်",
-        'payment': f"💎 **Premium Upgrade**\n\n💰 **၁ လ:** 3000 ကျပ် / 1.0 USDT\n💳 **KPay:** `{KPAY}`\n💳 **AYAPay:** `{AYAPAY}`\n🌐 **BEP20:** `{BEP20}`\n⚠️ **Note:** ID `{{uid}}` ကို Screenshot နှင့်အတူ ပို့ပေးပါ။",
+        'payment': "💎 **Premium Upgrade**\n\n💰 **၁ လ:** 3000 ကျပ် / 1.0 USDT\n💳 **KPay:** `{kpay}`\n💳 **AYAPay:** `{ayapay}`\n🌐 **BEP20:** `{bep20}`\n⚠️ **Note:** ID `{uid}` ကို Screenshot နှင့်အတူ ပို့ပေးပါ။",
     },
     'en': {
         'intro': "🎬 **Welcome to Movie Spliter Bot**",
         'open': "🚀 Open Mini App",
         'profile': "👤 My Profile",
         'buy': "💎 Buy Premium",
-        'payment': f"💎 **Premium Upgrade**\n\n💰 **1 Month:** 3000 MMK / 1.0 USDT\n💳 **KPay:** `{KPAY}`\n💳 **AYAPay:** `{AYAPAY}`\n🌐 **BEP20:** `{BEP20}`\n⚠️ **Note:** Send ID `{{uid}}` with screenshot.",
+        'payment': "💎 **Premium Upgrade**\n\n💰 **1 Month:** 3000 MMK / 1.0 USDT\n💳 **KPay:** `{kpay}`\n💳 **AYAPay:** `{ayapay}`\n🌐 **BEP20:** `{bep20}`\n⚠️ **Note:** Send ID `{uid}` with screenshot.",
     }
 }
 
@@ -58,13 +62,16 @@ async def set_lang(c, q):
     lang = q.data.split("_")[1]
     uid = str(q.from_user.id)
     db.collection('users').document(uid).set({'lang': lang, 'uid': uid, 'is_premium': False, 'expiry_date': 'N/A'}, merge=True)
-    kb = ReplyKeyboardMarkup([[KeyboardButton(TEXTS[lang]['open'], web_app=WebAppInfo(url=WEB_URL))],
-        [KeyboardButton(TEXTS[lang]['profile']), KeyboardButton(TEXTS[lang]['buy'])]], resize_keyboard=True)
+    
+    kb = ReplyKeyboardMarkup([
+        [KeyboardButton(TEXTS[lang]['open'], web_app=WebAppInfo(url=WEB_URL))],
+        [KeyboardButton(TEXTS[lang]['profile']), KeyboardButton(TEXTS[lang]['buy'])]
+    ], resize_keyboard=True)
+    
     await q.message.delete()
     await c.send_message(uid, TEXTS[lang]['intro'], reply_markup=kb)
 
-# --- [ Profile Logic with Auto Expiry Check ] ---
-@app.on_message(filters.regex(r"👤 My Profile") & filters.private)
+@app.on_message(filters.regex(r"(👤 My Profile|👤 Profile)") & filters.private)
 async def show_profile(c, m):
     uid = str(m.from_user.id)
     u_doc = db.collection('users').document(uid).get().to_dict() or {}
@@ -72,6 +79,7 @@ async def show_profile(c, m):
     is_premium = u_doc.get('is_premium', False)
     exp_str = u_doc.get('expiry_date', 'N/A')
 
+    # Premium Expiry Check
     if is_premium and exp_str != 'N/A':
         try:
             exp_date = datetime.strptime(exp_str, "%Y-%m-%d %H:%M:%S")
@@ -96,7 +104,9 @@ async def show_buy(c, m):
     uid = m.from_user.id
     u_doc = db.collection('users').document(str(uid)).get().to_dict() or {}
     lang = u_doc.get('lang', 'my')
-    await m.reply_text(TEXTS[lang]['payment'].format(uid=uid))
+    # Formatting fixes for payment text
+    pay_text = TEXTS[lang]['payment'].format(uid=uid, kpay=KPAY, ayapay=AYAPAY, bep20=BEP20)
+    await m.reply_text(pay_text)
 
 @app.on_message(filters.command("set_premium") & filters.user(ADMIN_ID))
 async def admin_set(c, m):
@@ -104,12 +114,23 @@ async def admin_set(c, m):
         args = m.text.split()
         target_id, days = args[1], int(args[2])
         exp_str = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-        db.collection('users').document(str(target_id)).update({'is_premium': True, 'expiry_date': exp_str})
+        db.collection('users').document(str(target_id)).update({
+            'is_premium': True, 
+            'expiry_date': exp_str
+        })
         await m.reply_text(f"✅ Success! `{target_id}` is Premium until `{exp_str}`.")
-    except: await m.reply_text("Format: `/set_premium <uid> <days>`")
+    except Exception as e:
+        await m.reply_text(f"Format: `/set_premium <uid> <days>`\nError: {e}")
 
+# --- [ Simple Web Server for Port Binding ] ---
 def srv():
-    http.server.HTTPServer(('0.0.0.0', int(os.getenv("PORT", 8080))), http.server.SimpleHTTPRequestHandler).serve_forever()
+    port = int(os.getenv("PORT", 8080))
+    server_address = ('', port)
+    httpd = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
+    print(f"Health check server running on port {port}")
+    httpd.serve_forever()
+
 threading.Thread(target=srv, daemon=True).start()
 
+print("Bot is starting...")
 app.run()
