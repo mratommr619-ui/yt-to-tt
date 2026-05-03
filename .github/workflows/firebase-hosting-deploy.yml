@@ -1,0 +1,21 @@
+name: Deploy to Firebase Hosting on merge
+'on':
+  push:
+    branches:
+      - main  # မိတ်ဆွေရဲ့ branch နာမည် main မဟုတ်ရင် master လို့ ပြင်ပေးပါ
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          # မိတ်ဆွေဆီမှာ ရှိပြီးသား Secret Name အတိုင်း ပြင်ထားပါတယ်
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          channelId: live
+          projectId: yttott-28862
