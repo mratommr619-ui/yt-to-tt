@@ -6,6 +6,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 # --- [ Configuration ] ---
+# These variables should be set in your environment variables for security
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -17,17 +18,21 @@ KPAY = "09695616591"
 AYAPAY = "09695616591"
 BEP20 = "0x56824c51be35937da7E60a6223E82cD1795984cC"
 
-# --- [ Firebase ] ---
+# --- [ Firebase Initialization ] ---
+# Connects to your Firestore database using a service account key
 if not firebase_admin._apps:
     try:
         cred_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
         if cred_json:
             firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
-    except: pass
+    except Exception as e:
+        print(f"Firebase Init Error: {e}")
+
 db = firestore.client()
 
 app = Client("luxury_spliter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
+# Dictionary for multilingual support
 TEXTS = {
     'my': {
         'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
@@ -49,6 +54,7 @@ TEXTS = {
 
 @app.on_message(filters.command("start") & filters.private)
 async def start(c, m):
+    """Sends the initial language selection buttons"""
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("🇲🇲 မြန်မာစာ", callback_data="lang_my"),
         InlineKeyboardButton("🇺🇸 English", callback_data="lang_en")
@@ -57,16 +63,21 @@ async def start(c, m):
 
 @app.on_callback_query(filters.regex("^lang_"))
 async def set_lang(c, q):
+    """Sets the user language and displays the main menu"""
     lang = q.data.split("_")[1]
     uid = str(q.from_user.id)
+    # Save user info to Firestore
     db.collection('users').document(uid).set({'lang': lang, 'uid': uid}, merge=True)
+    
     kb = ReplyKeyboardMarkup([[KeyboardButton(TEXTS[lang]['open'], web_app=WebAppInfo(url=WEB_URL))],
         [KeyboardButton(TEXTS[lang]['profile']), KeyboardButton(TEXTS[lang]['buy'])]], resize_keyboard=True)
+    
     await q.message.delete()
     await c.send_message(uid, TEXTS[lang]['intro'], reply_markup=kb)
 
 @app.on_message(filters.regex("^(💎|💎 Buy Premium|💎 Premium ဝယ်ယူရန်)") & filters.private)
 async def show_payment(c, m):
+    """Shows specific payment instructions based on language"""
     uid = m.from_user.id
     u = db.collection('users').document(str(uid)).get().to_dict()
     lang = u.get('lang', 'my') if u else 'my'
@@ -74,16 +85,26 @@ async def show_payment(c, m):
 
 @app.on_message(filters.command("set_premium") & filters.user(ADMIN_ID))
 async def admin_set(c, m):
+    """Admin command to grant premium status"""
     try:
         args = m.text.split()
         target_id, days = args[1], int(args[2])
+        # Calculate expiry date based on days provided
         exp = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-        db.collection('users').document(str(target_id)).update({'is_premium': True, 'expiry_date': exp})
-        await m.reply_text(f"✅ Success! {target_id} is Premium.")
-    except: pass
+        db.collection('users').document(str(target_id)).update({
+            'is_premium': True, 
+            'expiry_date': exp
+        })
+        await m.reply_text(f"✅ Success! {target_id} is Premium until {exp}.")
+    except Exception as e:
+        await m.reply_text("Usage: `/set_premium <user_id> <days>`")
 
+# --- [ Server to keep bot alive ] ---
 def srv():
-    http.server.HTTPServer(('0.0.0.0', int(os.getenv("PORT", 8080))), http.server.SimpleHTTPRequestHandler).serve_forever()
+    """Starts a basic server to prevent hosting timeouts"""
+    http.server.HTTPServer(('0.0.0.0', int(os.getenv("PORT", 8080))), 
+                           http.server.SimpleHTTPRequestHandler).serve_forever()
+
 threading.Thread(target=srv, daemon=True).start()
 
 app.run()
