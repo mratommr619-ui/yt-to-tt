@@ -13,8 +13,7 @@
         body { 
             background: var(--dark); color: #fff; font-family: sans-serif; 
             display: flex; flex-direction: column; justify-content: center; align-items: center; 
-            min-height: 100vh; margin: 0; overflow-x: hidden; 
-            padding: 70px 0; /* အပေါ်နဲ့အောက် Banner အတွက် နေရာစာန် */
+            min-height: 100vh; margin: 0; padding: 70px 0; overflow-x: hidden;
         }
         .card { 
             background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); padding: 25px; 
@@ -22,17 +21,16 @@
             width: 90%; max-width: 380px; text-align: center; z-index: 10;
         }
         h2 { background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; font-size: 20px; margin-bottom: 20px; }
-        .step { display: none; flex-direction: column; gap: 15px; } .active { display: flex; }
+        .step { display: none; flex-direction: column; gap: 12px; } .active { display: flex; }
         label { color: #bf953f; font-size: 11px; text-align: left; font-weight: bold; text-transform: uppercase; }
         input { width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(191,149,63,0.2); border-radius: 10px; color: #fff; box-sizing: border-box; outline: none; }
         .btn-gold { background: var(--gold); color: #000; font-weight: bold; padding: 14px; border-radius: 12px; border: none; cursor: pointer; text-transform: uppercase; margin-top: 5px; }
         .skip-btn { background: transparent; color: #888; border: 1px solid #444; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; margin-top: 5px; }
-        
-        .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 5px; }
         .pos-btn { background: rgba(255,255,255,0.05); color: #888; border: 1px solid #333; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 10px; text-transform: uppercase; }
         .pos-btn.selected { border-color: #bf953f; color: #fff; background: rgba(191, 149, 63, 0.3); }
 
-        /* Banner Containers (Fixed) */
+        /* Ads Container Fixed */
         #ad-top, #ad-bottom {
             position: fixed; left: 0; width: 100%; height: 60px;
             background: #000; display: flex; justify-content: center; align-items: center; z-index: 999;
@@ -99,7 +97,6 @@
     
     let logoData = "", selectedPos = "tr", userLang = "my", isPremiumUser = false;
 
-    // Load Data & Ads
     db.collection('users').doc(uid).get().then(doc => {
         if(doc.exists) {
             const data = doc.data();
@@ -107,14 +104,26 @@
             isPremiumUser = data.is_premium || false;
             
             if (!isPremiumUser) {
-                // Adsterra Social Bar Load
-                const s = document.createElement('script');
-                s.src = '//pl25785085.highratecpmgate.com/83/87/1b/83871b6938a164b3fdf89f92931c8172.js';
-                document.head.appendChild(s);
+                // 1. Social Bar Load
+                const sBar = document.createElement('script');
+                sBar.src = '//pl25785085.highratecpmgate.com/83/87/1b/83871b6938a164b3fdf89f92931c8172.js';
+                document.head.appendChild(sBar);
 
-                // Banner Placeholder Text (If you have banner code, paste it here)
-                document.getElementById('ad-top').innerHTML = "<span style='font-size:10px; color:#555;'>TOP BANNER AD</span>";
-                document.getElementById('ad-bottom').innerHTML = "<span style='font-size:10px; color:#555;'>BOTTOM BANNER AD</span>";
+                // 2. Top Banner (မိတ်ဆွေ ပေးထားတဲ့ ID နေရာ)
+                const sTop = document.createElement('script');
+                sTop.innerHTML = `atOptions = { 'key' : '83871b6938a164b3fdf89f92931c8172', 'format' : 'iframe', 'height' : 60, 'width' : 468, 'params' : {} };`;
+                const sTop2 = document.createElement('script');
+                sTop2.src = "//www.highperformanceformat.com/83871b6938a164b3fdf89f92931c8172/invoke.js";
+                document.getElementById('ad-top').appendChild(sTop);
+                document.getElementById('ad-top').appendChild(sTop2);
+
+                // 3. Bottom Banner
+                const sBot = document.createElement('script');
+                sBot.innerHTML = `atOptions = { 'key' : '83871b6938a164b3fdf89f92931c8172', 'format' : 'iframe', 'height' : 60, 'width' : 468, 'params' : {} };`;
+                const sBot2 = document.createElement('script');
+                sBot2.src = "//www.highperformanceformat.com/83871b6938a164b3fdf89f92931c8172/invoke.js";
+                document.getElementById('ad-bottom').appendChild(sBot);
+                document.getElementById('ad-bottom').appendChild(sBot2);
             } else {
                 document.getElementById('ad-top').style.display = 'none';
                 document.getElementById('ad-bottom').style.display = 'none';
