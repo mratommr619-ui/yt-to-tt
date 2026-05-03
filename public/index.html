@@ -8,187 +8,105 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
+    <script type='text/javascript' src='//pl25785085.highratecpmgate.com/83/87/1b/83871b6938a164b3fdf89f92931c8172.js'></script>
+
     <style>
-        :root { 
-            --gold: linear-gradient(45deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c); 
-            --dark: #000; 
-            --glass: rgba(255, 255, 255, 0.05);
-        }
-        body { 
-            background: var(--dark); color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 0; padding: 0; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; 
-        }
-        .card { 
-            background: var(--glass); backdrop-filter: blur(25px); padding: 35px 25px; 
-            border-radius: 30px; border: 1px solid rgba(191,149,63,0.3); 
-            width: 90%; max-width: 370px; text-align: center; box-shadow: 0 15px 50px rgba(0,0,0,1); 
-        }
-        h2 { 
-            background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
-            text-transform: uppercase; font-size: 24px; margin-bottom: 30px; font-weight: 900; letter-spacing: 1.5px; 
-        }
-        .step { display: none; flex-direction: column; gap: 20px; animation: fadeIn 0.4s ease; } 
-        .active { display: flex; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        label { color: #bf953f; font-size: 12px; text-align: left; font-weight: bold; text-transform: uppercase; margin-bottom: -10px; padding-left: 5px; }
-        input { 
-            width: 100%; padding: 15px; background: rgba(255,255,255,0.08); 
-            border: 1px solid rgba(191,149,63,0.2); border-radius: 15px; 
-            color: #fff; box-sizing: border-box; outline: none; font-size: 15px; transition: 0.3s;
-        }
-        input:focus { border-color: #fcf6ba; background: rgba(255,255,255,0.12); box-shadow: 0 0 15px rgba(191,149,63,0.1); }
+        :root { --gold: linear-gradient(45deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c); --dark: #000; }
+        body { background: var(--dark); color: #fff; font-family: sans-serif; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; }
         
-        .btn-gold { 
-            background: var(--gold); color: #000; font-weight: bold; padding: 18px; 
-            border-radius: 18px; border: none; cursor: pointer; text-transform: uppercase; 
-            margin-top: 10px; font-size: 15px; box-shadow: 0 5px 20px rgba(191,149,63,0.4); 
-            transition: 0.2s;
+        /* အပေါ်နဲ့အောက်မှာ ကြော်ငြာနေရာလွတ်ထားခြင်း */
+        #ad-box { width: 100%; height: 60px; display: flex; justify-content: center; align-items: center; margin-bottom: 10px; }
+
+        .card { 
+            background: rgba(255,255,255,0.05); backdrop-filter: blur(25px); padding: 25px; 
+            border-radius: 28px; border: 1px solid rgba(191,149,63,0.3); 
+            width: 90%; max-width: 360px; text-align: center; position: relative; z-index: 100;
         }
-        .btn-gold:active { transform: scale(0.96); }
-
-        .skip-btn { background: transparent; color: #666; border: 1px solid #333; padding: 12px; border-radius: 14px; cursor: pointer; font-size: 11px; margin-top: 5px; transition: 0.3s; }
-        .skip-btn:hover { color: #aaa; border-color: #555; }
-
-        .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 5px; }
-        .pos-btn { background: rgba(255,255,255,0.03); color: #888; border: 1px solid #222; padding: 14px; border-radius: 12px; cursor: pointer; font-size: 11px; text-transform: uppercase; transition: 0.3s; }
-        .pos-btn.selected { border-color: #bf953f; color: #fff; background: rgba(191, 149, 63, 0.3); font-weight: bold; }
+        h2 { background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; font-size: 20px; margin-bottom: 25px; font-weight: 800; }
+        .step { display: none; flex-direction: column; gap: 15px; } .active { display: flex; }
+        label { color: #bf953f; font-size: 11px; text-align: left; font-weight: bold; text-transform: uppercase; margin-bottom: -5px; }
+        input { width: 100%; padding: 14px; background: rgba(255,255,255,0.1); border: 1px solid rgba(191,149,63,0.2); border-radius: 12px; color: #fff; box-sizing: border-box; outline: none; }
+        .btn-gold { background: var(--gold); color: #000; font-weight: bold; padding: 16px; border-radius: 15px; border: none; cursor: pointer; text-transform: uppercase; margin-top: 10px; }
+        .skip-btn { background: transparent; color: #888; border: 1px solid #444; padding: 10px; border-radius: 12px; cursor: pointer; font-size: 11px; margin-top: 5px; }
+        .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
+        .pos-btn { background: rgba(255,255,255,0.05); color: #888; border: 1px solid #333; padding: 12px; border-radius: 10px; cursor: pointer; font-size: 10px; text-transform: uppercase; }
+        .pos-btn.selected { border-color: #bf953f; color: #fff; background: rgba(191, 149, 63, 0.3); }
     </style>
 </head>
 <body>
 
+<div id="ad-box">
+    </div>
+
 <div class="card">
     <h2 id="title">Luxury Spliter</h2>
     
-    <div id="step1" class="step active">
-        <label id="l_link">Video Source URL</label>
-        <input type="text" id="vLink" placeholder="https://...">
-        <button class="btn-gold" id="bn1" onclick="v_link()">Next Step</button>
-    </div>
-
-    <div id="step2" class="step">
-        <label id="l_name">Movie Name</label>
-        <input type="text" id="vName" value="movie">
-        <button class="btn-gold" id="bn2" onclick="next(3)">Next Step</button>
-        <button class="skip-btn" id="bs_n" onclick="next(3)">Skip</button>
-    </div>
-
-    <div id="step3" class="step">
-        <label id="l_time">Split Duration (Min)</label>
-        <input type="text" id="vLen" value="5:00">
-        <button class="btn-gold" id="bn3" onclick="next(4)">Next Step</button>
-        <button class="skip-btn" id="bs_t" onclick="next(4)">Skip</button>
-    </div>
-
-    <div id="step4" class="step">
-        <label id="l_wm">Watermark Text</label>
-        <input type="text" id="vWm" placeholder="Enter brand name">
-        <button class="btn-gold" id="bn4" onclick="next(5)">Next Step</button>
-        <button class="skip-btn" id="bs_w" onclick="skip_wm()">Skip</button>
-    </div>
-
+    <div id="step1" class="step active"><label id="l_link">ဗီဒီယိုလင့်ခ်</label><input type="text" id="vLink" placeholder="https://..."><button class="btn-gold" onclick="v_link()">ရှေ့သို့</button></div>
+    <div id="step2" class="step"><label id="l_name">ဇာတ်ကားအမည်</label><input type="text" id="vName" value="movie"><button class="btn-gold" onclick="next(3)">ရှေ့သို့</button><button class="skip-btn" onclick="next(3)">ကျော်မည်</button></div>
+    <div id="step3" class="step"><label id="l_time">ဖြတ်မည့်မိနစ်</label><input type="text" id="vLen" value="5:00"><button class="btn-gold" onclick="next(4)">ရှေ့သို့</button><button class="skip-btn" onclick="next(4)">ကျော်မည်</button></div>
+    <div id="step4" class="step"><label id="l_wm">Watermark</label><input type="text" id="vWm" placeholder="..."><button class="btn-gold" onclick="next(5)">ရှေ့သို့</button><button class="skip-btn" onclick="skip_wm()">ကျော်မည်</button></div>
     <div id="step5" class="step">
-        <label id="l_logo">Brand Logo Image</label>
-        <input type="file" id="vLogo" accept="image/*" onchange="h_file(this)">
-        <label style="margin-top: 10px;">Logo Position</label>
+        <label id="l_logo">လိုဂိုတင်ရန်</label><input type="file" id="vLogo" accept="image/*" onchange="h_file(this)">
         <div class="pos-grid">
-            <button id="tl" class="pos-btn" onclick="setPos('tl', this)">Top Left</button>
-            <button id="tr" class="pos-btn selected" onclick="setPos('tr', this)">Top Right</button>
-            <button id="bl" class="pos-btn" onclick="setPos('bl', this)">Bottom Left</button>
-            <button id="br" class="pos-btn" onclick="setPos('br', this)">Bottom Right</button>
+            <button id="tl" class="pos-btn" onclick="setPos('tl', this)">TL</button><button id="tr" class="pos-btn selected" onclick="setPos('tr', this)">TR</button>
+            <button id="bl" class="pos-btn" onclick="setPos('bl', this)">BL</button><button id="br" class="pos-btn" onclick="setPos('br', this)">BR</button>
         </div>
-        <button id="finalBtn" class="btn-gold" onclick="h_process()">🚀 Start Split Now</button>
-        <button class="skip-btn" id="bs_l" onclick="h_process()">No Logo, Just Start</button>
+        <button id="finalBtn" class="btn-gold" onclick="h_process()">🚀 စတင်ဖြတ်မည်</button>
+        <button class="skip-btn" onclick="h_process()">ကျော်မည်</button>
     </div>
 </div>
 
-<script>
-    // Initialize Firebase
-    firebase.initializeApp({ projectId: "yttott-28862" });
-    const db = firebase.firestore();
-    const tg = window.Telegram.WebApp;
-    const uid = tg.initDataUnsafe?.user?.id?.toString() || "1715890141";
-    
-    let logoData = "", selectedPos = "tr", userLang = "my", isPremiumUser = false;
+<script type='text/javascript' src='//pl25785108.highratecpmgate.com/2b/28/3e/2b283e74c8606479f649257e8f52636a.js'></script>
 
-    // Load User and Ad Logic
+<script>
+    firebase.initializeApp({ projectId: "yttott-28862" });
+    const db = firebase.firestore(), tg = window.Telegram.WebApp, uid = tg.initDataUnsafe?.user?.id?.toString() || "1715890141";
+    let logoData = "", selectedPos = "tr", userLang = "my";
+
+    // Telegram UI Expand
+    tg.expand();
+
+    // User Data & Language
     db.collection('users').doc(uid).get().then(doc => {
         if(doc.exists) {
-            const data = doc.data();
-            isPremiumUser = data.is_premium || false;
-            userLang = data.lang || "my";
-            
-            if (!isPremiumUser) {
-                // 1. Social Bar Script (Active ID: 29223266)
-                const s = document.createElement('script');
-                s.src = '//pl25785085.highratecpmgate.com/83/87/1b/83871b6938a164b3fdf89f92931c8172.js';
-                document.head.appendChild(s);
-
-                // 2. Popunder Script (Active ID: 29223265)
-                const p = document.createElement('script');
-                p.src = '//pl25785108.highratecpmgate.com/2b/28/3e/2b283e74c8606479f649257e8f52636a.js';
-                document.head.appendChild(p);
-            }
+            userLang = doc.data().lang || "my";
+            applyLang(userLang);
         }
-        applyLang(userLang);
     });
 
     function applyLang(l) {
-        const t = {
-            en: { link: "Video Source URL", name: "Movie Name", time: "Split Duration", wm: "Watermark Text", logo: "Logo Image", next: "Next Step", skip: "Skip", start: "🚀 Start Split Now" },
-            my: { link: "ဗီဒီယိုလင့်ခ်", name: "ဇာတ်ကားအမည်", time: "ဖြတ်မည့်မိနစ်", wm: "Watermark စာသား", logo: "လိုဂိုတင်ရန်", next: "ရှေ့သို့", skip: "ကျော်မည်", start: "🚀 စတင်ဖြတ်မည်" }
+        const t = { 
+            en: { link: "Video Link", name: "Movie Name", time: "Split Time", wm: "Watermark", logo: "Logo Image", start: "🚀 START SPLIT" }, 
+            my: { link: "ဗီဒီယိုလင့်ခ်", name: "ဇာတ်ကားအမည်", time: "ဖြတ်မည့်မိနစ်", wm: "Watermark စာသား", logo: "လိုဂိုတင်ရန်", start: "🚀 စတင်ဖြတ်မည်" } 
         };
         const c = t[l] || t.my;
-        document.getElementById('l_link').innerText = c.link; document.getElementById('l_name').innerText = c.name;
-        document.getElementById('l_time').innerText = c.time; document.getElementById('l_wm').innerText = c.wm;
+        document.getElementById('l_link').innerText = c.link; 
+        document.getElementById('l_name').innerText = c.name; 
+        document.getElementById('l_time').innerText = c.time; 
+        document.getElementById('l_wm').innerText = c.wm; 
         document.getElementById('l_logo').innerText = c.logo;
-        document.getElementById('bn1').innerText = c.next; document.getElementById('bn2').innerText = c.next;
-        document.getElementById('bn3').innerText = c.next; document.getElementById('bn4').innerText = c.next;
-        document.getElementById('bs_n').innerText = c.skip; document.getElementById('bs_t').innerText = c.skip;
-        document.getElementById('bs_w').innerText = c.skip; document.getElementById('bs_l').innerText = c.skip;
         document.getElementById('finalBtn').innerText = c.start;
     }
 
-    function v_link() { if(document.getElementById('vLink').value) next(2); else alert("Please enter video link!"); }
+    function v_link() { if(document.getElementById('vLink').value) next(2); else alert("Link Required!"); }
     function next(n) { document.querySelectorAll('.step').forEach(s => s.classList.remove('active')); document.getElementById('step' + n).classList.add('active'); }
     function setPos(p, b) { selectedPos = p; document.querySelectorAll('.pos-btn').forEach(btn => btn.classList.remove('selected')); b.classList.add('selected'); }
     function skip_wm() { document.getElementById('vWm').value = ""; next(5); }
+    function h_file(i) { const f = i.files[0]; if(f && f.size <= 1048576) { const r = new FileReader(); r.onload = (e) => { logoData = e.target.result; }; r.readAsDataURL(f); } }
     
-    function h_file(i) { 
-        const f = i.files[0]; 
-        if(f && f.size <= 1048576) { 
-            const r = new FileReader(); 
-            r.onload = (e) => { logoData = e.target.result; }; 
-            r.readAsDataURL(f); 
-        } else if(f) {
-            alert("File too large! Max 1MB.");
-            i.value = "";
-        }
-    }
-
     async function h_process() {
         const btn = document.getElementById('finalBtn');
-        btn.disabled = true;
-        btn.innerText = "Processing...";
-        
-        await db.collection('tasks').add({
-            user_id: uid, 
-            value: document.getElementById('vLink').value,
-            name: document.getElementById('vName').value || "movie",
-            len: document.getElementById('vLen').value || "5:00",
-            logo_data: logoData, 
-            pos: selectedPos, 
-            wm: document.getElementById('vWm').value || "",
-            status: 'pending', 
-            last_sent_index: -1, 
-            lang: userLang, 
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        btn.disabled = true; btn.innerText = "Processing...";
+        await db.collection('tasks').add({ 
+            user_id: uid, value: document.getElementById('vLink').value, 
+            name: document.getElementById('vName').value || "movie", 
+            len: document.getElementById('vLen').value || "5:00", 
+            logo_data: logoData, pos: selectedPos, wm: document.getElementById('vWm').value || "", 
+            status: 'pending', last_sent_index: -1, lang: userLang, 
+            createdAt: firebase.firestore.FieldValue.serverTimestamp() 
         });
-        
         tg.close();
     }
-    
-    tg.expand();
 </script>
 </body>
 </html>
