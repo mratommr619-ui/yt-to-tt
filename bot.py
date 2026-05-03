@@ -1,131 +1,111 @@
-import os, base64, subprocess, asyncio, firebase_admin, json, re
+import os, base64, subprocess, asyncio, firebase_admin, json, re, shutil
 from firebase_admin import credentials, firestore
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-# 1. Firebase Initialization
+# 1. Firebase Initializer
 if not firebase_admin._apps:
-    try:
-        cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
-        if cred_json:
-            firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
-    except Exception as e:
-        print(f"Firebase Error: {e}")
-
+    cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+    if cred_json:
+        firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
 db = firestore.client()
 
 async def run_bot():
-    # 2. Credentials Setup
-    api_id = int(os.environ.get("API_ID"))
-    api_hash = os.environ.get("API_HASH")
-    session_str = os.environ.get("SESSION_STRING")
-    
+    # 2. Telegram Auth
+    api_id = int(os.environ.get("API_ID", 0))
+    api_hash = os.environ.get("API_HASH", "")
+    session_str = os.environ.get("SESSION_STRING", "")
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
     await client.start()
-    print("Bot is online and monitoring tasks...")
+    print("🚀 Bot Connected! GitHub High-Speed Mode Active.")
 
     while True:
         try:
-            # 3. Task Fetching (Pending tasks only)
-            tasks = db.collection('tasks').where(
-                filter=FieldFilter("status", "==", "pending")
-            ).limit(1).get()
+            # ၃။ တန်းစီစနစ် (Queue) - Processing ဟောင်းရှိရင် အရင်ယူ၊ မရှိရင် အစောဆုံး Pending ကိုယူ
+            # အရင်ဆုံး processing ဖြစ်နေတာရှိလား စစ်ပါတယ်
+            tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "processing")).limit(1).get()
             
+            # မရှိရင် အစောဆုံးတင်ထားတဲ့ pending ကိုယူပါတယ်
             if not tasks:
-                await asyncio.sleep(5)
-                continue
+                tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "pending")).order_by("createdAt", direction=firestore.Query.ASCENDING).limit(1).get()
+
+            if not tasks:
+                await asyncio.sleep(5); continue
             
             doc = tasks[0]; ref = doc.reference; data = doc.to_dict()
-            uid = int(data['user_id']); lang = data.get('lang', 'my')
-            v_url = data['value'].strip()
+            uid = int(data['user_id']); lang = data.get('lang', 'my'); v_url = data['value'].strip()
+            last_sent = data.get('last_sent_index', -1)
             
-            # Status ကို processing လို့ ချက်ချင်းပြောင်းမှ loop မပတ်မှာပါ
-            ref.update({'status': 'processing'})
-            
-            # 4. Instant Feedback
-            ack_msg = "သင့် video ကို လက်ခံရရှိပါသည်၊ ဖြတ်ပြီးပါက ပြန်လည်ပို့ဆောင်ပေးပါမည်။" if lang == 'my' else "Video received. Processing now..."
-            await client.send_message(uid, ack_msg)
+            # Lock Status (Pending ဆိုရင် Processing ပြောင်း)
+            if data['status'] == 'pending':
+                ref.update({'status': 'processing'})
+                ack = "ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပါ။" if lang == 'my' else "Video received. Processing..."
+                await client.send_message(uid, ack)
 
-            # 5. Smart Download Logic
-            if "t.me/" in v_url:
-                parts_url = v_url.split('/')
-                peer = parts_url[-2]; msg_id = int(parts_url[-1])
-                msg_obj = await client.get_messages(peer, ids=msg_id)
-                await client.download_media(msg_obj, "vid.mp4")
-            else:
-                subprocess.run(['yt-dlp', '--no-check-certificate', '--location', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
+            # ၄။ Download Logic (မူရင်းဖိုင် မရှိမှ ဒေါင်းမည်)
+            if not os.path.exists("vid.mp4"):
+                print(f"📥 Downloading Original Video for UID: {uid}...")
+                if "t.me/" in v_url:
+                    p = v_url.split('/')
+                    await client.download_media(await client.get_messages(p[-2], ids=int(p[-1])), "vid.mp4")
+                else:
+                    subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
 
-            if not os.path.exists("vid.mp4"): raise Exception("Download Failed")
-
-            # 6. Video Processing (Wave Watermark & Logo)
-            duration_parts = list(map(int, reversed(data.get('len', '5:00').split(':'))))
-            duration_sec = sum(x * 60**i for i, x in enumerate(duration_parts))
-            
-            # --- [ Pyidaungsu Font အသုံးပြုထားသော Filter ] ---
-            # Fontfile path ကို Pyidaungsu.ttf လို့ ပေးထားပါတယ်။
-            # x, y logic က စာသားကို wave ပုံစံ တစ်ဗီဒီယိုလုံး ပတ်ရွေ့နေစေမှာပါ။
-            logic = "x='(w-text_w)/2 + (w-text_w)/2*sin(t/2)':y='(h-text_h)/2 + (h-text_h)/2*sin(t/3)'"
-            drawtext = f"drawtext=text='{data.get('wm', '')}':{logic}:fontfile='Pyidaungsu.ttf':fontcolor=white@0.4:fontsize=50"
-            
-            v_input = ['-i', 'vid.mp4']
-            
-            if data.get('logo_data'):
-                with open("logo.png", "wb") as f: 
-                    f.write(base64.b64decode(data['logo_data'].split(",")[1]))
-                v_input = ['-i', 'vid.mp4', '-i', 'logo.png']
-                
-                pos_map = {"tr": "W-w-15:15", "tl": "15:15", "br": "W-w-15:H-h-15", "bl": "15:H-h-15"}
-                pos = pos_map.get(data['pos'], 'W-w-15:15')
-                
-                # Logo size ကို ညှိပြီး 60% transparent (aa=0.6) လုပ်ပါတယ်။
-                full_filter = (
-                    f"[1:v]scale=150:-1,format=rgba,colorchannelmixer=aa=0.6[logo];"
-                    f"[0:v]{drawtext}[v1];"
-                    f"[v1][logo]overlay={pos}"
-                )
-                filter_cmd = ['-filter_complex', full_filter]
-            else:
-                filter_cmd = ['-vf', drawtext]
-
-            # 7. Execute FFmpeg Splitting
+            # ၅။ FFmpeg Processing & Splitting
             os.makedirs("parts", exist_ok=True)
-            for f in os.listdir("parts"): os.remove(os.path.join("parts", f))
-
-            cmd = ['ffmpeg', '-y'] + v_input + filter_cmd + [
-                '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
-                '-c:a', 'copy', '-f', 'segment', '-segment_time', str(duration_sec), 
-                '-reset_timestamps', '1', 'parts/p_%03d.mp4'
-            ]
-            subprocess.run(cmd, check=True)
-
-            # 8. Upload Result (Myanmar/English Adaptive)
-            parts_files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
-            total_parts = len(parts_files)
-
-            part_label = "အပိုင်း" if lang == 'my' else "Part"
-            end_label = "\n\n(ဇာတ်သိမ်းပိုင်း) ✅" if lang == 'my' else "\n\n(End Part) ✅"
-
-            for idx, p in enumerate(parts_files):
-                part_num = idx + 1
-                # Myanmar: အပိုင်း (၁) | English: Part 1
-                caption = f"🎬 {data.get('name', 'movie')} - {part_label} ({part_num})" if lang == 'my' else f"🎬 {data.get('name', 'movie')} - {part_label} {part_num}"
+            # အပိုင်းတွေ မခွဲရသေးရင် ဖြတ်ပါမယ်
+            if not os.listdir("parts"):
+                print("✂️ Splitting Video...")
+                duration = sum(x * 60**i for i, x in enumerate(map(int, reversed(data.get('len', '5:00').split(':')))))
+                wm_logic = "x='(w-text_w)/2+(w-text_w)/2*sin(t/2)':y='(h-text_h)/2+(h-text_h)/2*sin(t/3)'"
+                drawtext = f"drawtext=text='{data.get('wm', '')}':{wm_logic}:fontfile='Pyidaungsu.ttf':fontcolor=white@0.4:fontsize=50"
                 
-                if part_num == total_parts:
-                    caption += end_label
-                
-                await client.send_file(uid, f"parts/{p}", caption=caption)
+                v_inputs = ['-i', 'vid.mp4']
+                if data.get('logo_data'):
+                    with open("logo.png", "wb") as f:
+                        f.write(base64.b64decode(data['logo_data'].split(",")[1]))
+                    v_inputs += ['-i', 'logo.png']
+                    pos = {"tr": "W-w-15:15", "tl": "15:15", "br": "W-w-15:H-h-15", "bl": "15:H-h-15"}.get(data['pos'], 'W-w-15:15')
+                    f_complex = f"[1:v]scale=150:-1,format=rgba,colorchannelmixer=aa=0.6[l];[0:v]{drawtext}[v1];[v1][l]overlay={pos}"
+                    filter_params = ['-filter_complex', f_complex]
+                else:
+                    filter_params = ['-vf', drawtext]
 
-            # Cleanup
+                ffmpeg_cmd = ['ffmpeg', '-y'] + v_inputs + filter_params + [
+                    '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'copy',
+                    '-f', 'segment', '-segment_time', str(duration), '-reset_timestamps', '1', 'parts/p_%03d.mp4'
+                ]
+                subprocess.run(ffmpeg_cmd, check=True)
+                
+                # --- [ DISK SPACE SAVER ] ---
+                # အပိုင်းခွဲပြီးတာနဲ့ မူရင်းဖိုင်ကြီးကို ချက်ချင်းဖျက်ပါမယ်
+                if os.path.exists("vid.mp4"): os.remove("vid.mp4")
+                if os.path.exists("logo.png"): os.remove("logo.png")
+                print("🗑️ Original file deleted to save space.")
+
+            # ၆။ Smart Upload (မပြီးသေးသည့် အပိုင်းမှ စပို့မည်)
+            files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
+            p_label = "အပိုင်း" if lang == 'my' else "Part"
+            end_tag = "\n\n(ဇာတ်သိမ်းပိုင်း) ✅" if lang == 'my' else "\n\n(End Part) ✅"
+            
+            for idx, p in enumerate(files):
+                if idx > last_sent:
+                    current_part = idx + 1
+                    caption = f"🎬 {data.get('name', 'movie')} - {p_label} ({current_part})" if lang == 'my' else f"🎬 {data.get('name', 'movie')} - {p_label} {current_part}"
+                    if current_part == len(files): caption += end_tag
+                    
+                    await client.send_file(uid, f"parts/{p}", caption=caption)
+                    ref.update({'last_sent_index': idx})
+
+            # ၇။ Task အောင်မြင်စွာ ပြီးဆုံးခြင်း
             ref.delete()
-            for f in ["vid.mp4", "logo.png"]: 
-                if os.path.exists(f): os.remove(f)
+            # ကျန်ရှိသည့် အပိုင်းဖိုင်များကို ရှင်းလင်းခြင်း
+            shutil.rmtree("parts")
+            print(f"✅ Finished UID: {uid}. Ready for next task.")
 
         except Exception as e:
-            print(f"Error: {e}")
-            try: ref.update({'status': 'failed', 'error': str(e)})
-            except: pass
-            await asyncio.sleep(5)
+            print(f"🚨 Loop Error: {e}"); await asyncio.sleep(10)
 
 if __name__ == "__main__":
     asyncio.run(run_bot())
