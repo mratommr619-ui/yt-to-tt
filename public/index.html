@@ -5,24 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>Luxury Spliter Pro</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://sad.adsgram.ai/js/adsgram-ad-sdk.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    
+
     <style>
-        :root { --gold: linear-gradient(45deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c); --dark: #0d0d0d; }
-        body { background: var(--dark); color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-        .card { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); padding: 25px; border-radius: 20px; border: 1px solid rgba(191,149,63,0.3); width: 92%; max-width: 380px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        h2 { background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; font-size: 22px; margin-bottom: 20px; letter-spacing: 1px; }
+        :root { --gold: linear-gradient(45deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c); --dark: #0a0a0a; }
+        body { background: var(--dark); color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .card { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); padding: 25px; border-radius: 20px; border: 1px solid rgba(191,149,63,0.3); width: 92%; max-width: 380px; text-align: center; }
+        h2 { background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; font-size: 20px; margin-bottom: 20px; }
         .step { display: none; flex-direction: column; gap: 15px; } .active { display: flex; }
         label { color: #bf953f; font-size: 11px; text-align: left; font-weight: bold; text-transform: uppercase; }
-        input { width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(191,149,63,0.2); border-radius: 10px; color: #fff; box-sizing: border-box; outline: none; transition: 0.3s; }
-        input:focus { border-color: #fcf6ba; }
-        .btn-gold { background: var(--gold); color: #000; font-weight: bold; padding: 14px; border-radius: 12px; border: none; cursor: pointer; text-transform: uppercase; box-shadow: 0 4px 15px rgba(191,149,63,0.3); }
-        .skip-btn { background: transparent; color: #888; border: 1px solid #444; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; }
-        .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .pos-btn { background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid #333; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 11px; }
-        .pos-btn.selected { border-color: #bf953f; color: #fff; background: rgba(191, 149, 63, 0.2); }
+        input { width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(191,149,63,0.2); border-radius: 10px; color: #fff; box-sizing: border-box; outline: none; }
+        .btn-gold { background: var(--gold); color: #000; font-weight: bold; padding: 14px; border-radius: 12px; border: none; cursor: pointer; text-transform: uppercase; margin-top: 5px; }
+        .skip-btn { background: transparent; color: #888; border: 1px solid #444; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; margin-top: 5px; }
+        .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .pos-btn { background: rgba(255,255,255,0.05); color: #888; border: 1px solid #333; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 10px; text-transform: uppercase; font-weight: bold; }
+        .pos-btn.selected { border-color: #bf953f; color: #fff; background: rgba(191, 149, 63, 0.3); }
     </style>
 </head>
 <body>
@@ -40,25 +38,25 @@
         <label id="l_name">Movie Name</label>
         <input type="text" id="vName" value="movie">
         <button class="btn-gold" id="bn2" onclick="next(3)">Next</button>
-        <button class="skip-btn" id="bs_n" onclick="next(3)">Skip</button>
+        <button class="skip-btn" onclick="next(3)">Skip</button>
     </div>
 
     <div id="step3" class="step">
         <label id="l_time">Split Time</label>
         <input type="text" id="vLen" value="5:00">
-        <button class="btn-gold" id="bn3" onclick="next(4)">Next</button>
-        <button class="skip-btn" id="bs_t" onclick="next(4)">Skip</button>
+        <button class="btn-gold" onclick="next(4)">Next</button>
+        <button class="skip-btn" onclick="next(4)">Skip</button>
     </div>
 
     <div id="step4" class="step">
         <label id="l_wm">Watermark</label>
         <input type="text" id="vWm" placeholder="...">
-        <button class="btn-gold" id="bn4" onclick="next(5)">Next</button>
-        <button class="skip-btn" id="bs_w" onclick="skip_wm()">Skip</button>
+        <button class="btn-gold" onclick="next(5)">Next</button>
+        <button class="skip-btn" onclick="skip_wm()">Skip</button>
     </div>
 
     <div id="step5" class="step">
-        <label id="l_logo">Logo Overlay</label>
+        <label id="l_logo">Brand Logo (Max 1MB)</label>
         <input type="file" id="vLogo" accept="image/*" onchange="h_file(this)">
         <div class="pos-grid">
             <button id="tl" class="pos-btn" onclick="setPos('tl', this)">TL</button>
@@ -66,8 +64,8 @@
             <button id="bl" class="pos-btn" onclick="setPos('bl', this)">BL</button>
             <button id="br" class="pos-btn" onclick="setPos('br', this)">BR</button>
         </div>
-        <button id="finalBtn" class="btn-gold" onclick="h_process(false)">🚀 START SPLIT</button>
-        <button class="skip-btn" id="bs_l" onclick="h_process(true)">Skip Logo</button>
+        <button id="finalBtn" class="btn-gold" onclick="h_process()">🚀 စတင်ဖြတ်မည်</button>
+        <button class="skip-btn" onclick="h_process()">Skip Logo</button>
     </div>
 </div>
 
@@ -76,67 +74,48 @@
     const db = firebase.firestore();
     const tg = window.Telegram.WebApp;
     const uid = tg.initDataUnsafe?.user?.id?.toString() || "1715890141";
-    let logoData = "", selectedPos = "tr", userLang = "my", isPremium = false;
+    
+    let logoData = "", selectedPos = "tr", userLang = "my", isPremiumUser = false;
 
-    // Load Lang & Premium Status
+    // Load User Data & Setup Ads
     db.collection('users').doc(uid).get().then(doc => {
         if(doc.exists) {
-            userLang = doc.data().lang || "my";
-            isPremium = doc.data().is_premium || false;
+            const data = doc.data();
+            userLang = data.lang || "my";
+            isPremiumUser = data.is_premium || false;
+            
+            // Premium မဟုတ်ရင် Adsterra Script ကို လှမ်းခေါ်မယ်
+            if (!isPremiumUser) {
+                const adScript = document.createElement('script');
+                adScript.type = 'text/javascript';
+                adScript.src = '//pl25785085.highratecpmgate.com/83/87/1b/83871b6938a164b3fdf89f92931c8172.js';
+                document.head.appendChild(adScript);
+            }
             applyLang(userLang);
         }
     });
 
     function applyLang(l) {
         const t = {
-            en: { link: "Video Link", name: "Movie Name", time: "Split Time", wm: "Watermark", logo: "Logo Image", next: "Next", skip: "Skip", start: "🚀 START SPLIT", tl: "TL", tr: "TR", bl: "BL", br: "BR" },
-            my: { link: "ဗီဒီယိုလင့်ခ်", name: "ဇာတ်ကားအမည်", time: "ဖြတ်မည့်မိနစ်", wm: "Watermark စာသား", logo: "လိုဂိုတင်ရန်", next: "ရှေ့သို့", skip: "ကျော်မည်", start: "🚀 စတင်ဖြတ်မည်", tl: "ဘယ်အပေါ်", tr: "ညာအပေါ်", bl: "ဘယ်အောက်", br: "ညာအောက်" }
+            en: { link: "Video Link", name: "Movie Name", time: "Split Time", wm: "Watermark", logo: "Logo Image", next: "Next", skip: "Skip", start: "🚀 START SPLIT" },
+            my: { link: "ဗီဒီယိုလင့်ခ်", name: "ဇာတ်ကားအမည်", time: "ဖြတ်မည့်မိနစ်", wm: "Watermark စာသား", logo: "လိုဂိုတင်ရန်", next: "ရှေ့သို့", skip: "ကျော်မည်", start: "🚀 စတင်ဖြတ်မည်" }
         };
         const c = t[l] || t.my;
         document.getElementById('l_link').innerText = c.link; document.getElementById('l_name').innerText = c.name;
         document.getElementById('l_time').innerText = c.time; document.getElementById('l_wm').innerText = c.wm;
-        document.getElementById('l_logo').innerText = c.logo; document.getElementById('bn1').innerText = c.next;
-        document.getElementById('bn2').innerText = c.next; document.getElementById('bn3').innerText = c.next;
-        document.getElementById('bn4').innerText = c.next; document.getElementById('bs_n').innerText = c.skip;
-        document.getElementById('bs_t').innerText = c.skip; document.getElementById('bs_w').innerText = c.skip;
-        document.getElementById('bs_l').innerText = c.skip + " Logo"; document.getElementById('finalBtn').innerText = c.start;
-        document.getElementById('tl').innerText = c.tl; document.getElementById('tr').innerText = c.tr;
-        document.getElementById('bl').innerText = c.bl; document.getElementById('br').innerText = c.br;
+        document.getElementById('l_logo').innerText = c.logo; document.getElementById('finalBtn').innerText = c.start;
     }
 
-    function v_link() { if(document.getElementById('vLink').value) next(2); else alert("Enter Link!"); }
+    function v_link() { if(document.getElementById('vLink').value) next(2); else alert("Link Required!"); }
     function next(n) { document.querySelectorAll('.step').forEach(s => s.classList.remove('active')); document.getElementById('step' + n).classList.add('active'); }
     function setPos(p, b) { selectedPos = p; document.querySelectorAll('.pos-btn').forEach(btn => btn.classList.remove('selected')); b.classList.add('selected'); }
     function skip_wm() { document.getElementById('vWm').value = ""; next(5); }
     function h_file(i) { const f = i.files[0]; if(f && f.size <= 1048576) { const r = new FileReader(); r.onload = (e) => { logoData = e.target.result; }; r.readAsDataURL(f); } }
 
-    async function h_process(skipLogo) {
-        if(skipLogo) logoData = "";
+    async function h_process() {
         const btn = document.getElementById('finalBtn');
         btn.disabled = true;
-
-        // Auto Expiry Check in Mini App
-        const doc = await db.collection('users').doc(uid).get();
-        const data = doc.data() || {};
-        let currentPremium = data.is_premium || false;
-        const expStr = data.expiry_date || 'N/A';
-
-        if (currentPremium && expStr !== 'N/A') {
-            if (new Date(expStr.replace(/-/g, "/")) < new Date()) {
-                await db.collection('users').doc(uid).update({ is_premium: false, expiry_date: 'N/A' });
-                currentPremium = false;
-            }
-        }
-
-        if (currentPremium) {
-            submitTask();
-        } else {
-            const Ad = window.Adsgram.init({ blockId: "63ebc67cd6c84995a6fdf647afaee479" });
-            Ad.show().then(r => { if(r.done) submitTask(); else location.reload(); }).catch(() => btn.disabled = false);
-        }
-    }
-
-    async function submitTask() {
+        
         await db.collection('tasks').add({
             user_id: uid, value: document.getElementById('vLink').value,
             name: document.getElementById('vName').value || "movie",
