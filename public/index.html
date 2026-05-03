@@ -10,19 +10,25 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-    <!-- 1. Popunder Script (ID: 29223265) -->
+    <!-- 1. Adsterra Popunder Script -->
     <script src="https://heavenlysuspicious.com/05/d1/b8/05d1b83f15627bbec3a9dda0da58b3be.js"></script>
     
-    <!-- 2. Social Bar Script (ID: 29223266) -->
+    <!-- 2. Adsterra Social Bar Script -->
     <script src="https://heavenlysuspicious.com/5b/eb/97/5beb971a0befc04b29f08c6168cf169b.js"></script>
 
     <style>
         :root { --gold: linear-gradient(45deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c); --dark: #000; }
-        body { background: var(--dark); color: #fff; font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; justify-content: center; overflow-x: hidden; }
-        
-        /* Banner Container logic */
-        .ad-container { margin: 15px 0; width: 100%; display: flex; justify-content: center; align-items: center; }
-        
+        body { 
+            background: var(--dark); color: #fff; font-family: sans-serif; 
+            margin: 0; padding: 75px 0; /* Banners အတွက် နေရာလွတ် */
+            display: flex; flex-direction: column; align-items: center; 
+            min-height: 100vh; justify-content: center; overflow-x: hidden; 
+        }
+
+        /* Fixed Banners CSS */
+        .ad-top { position: fixed; top: 0; left: 0; width: 100%; height: 90px; z-index: 1000; display: flex; justify-content: center; background: rgba(0,0,0,0.8); }
+        .ad-bottom { position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; z-index: 1000; display: flex; justify-content: center; background: rgba(0,0,0,0.8); }
+
         .card { 
             background: rgba(255,255,255,0.05); backdrop-filter: blur(25px); padding: 25px; 
             border-radius: 28px; border: 1px solid rgba(191,149,63,0.3); 
@@ -34,16 +40,16 @@
         label { color: #bf953f; font-size: 11px; text-align: left; font-weight: bold; text-transform: uppercase; margin-bottom: -5px; }
         input { width: 100%; padding: 14px; background: rgba(255,255,255,0.1); border: 1px solid rgba(191,149,63,0.2); border-radius: 12px; color: #fff; box-sizing: border-box; outline: none; }
         .btn-gold { background: var(--gold); color: #000; font-weight: bold; padding: 16px; border-radius: 15px; border: none; cursor: pointer; text-transform: uppercase; margin-top: 10px; }
-        .skip-btn { background: transparent; color: #888; border: 1px solid #444; padding: 10px; border-radius: 12px; cursor: pointer; font-size: 11px; margin-top: 5px; }
+        .skip-btn { background: transparent; color: #888; border: 1px solid #444; padding: 10px; border-radius: 12px; cursor: pointer; font-size: 11px; margin-top: 5px; border: none; }
         .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
-        .pos-btn { background: rgba(255,255,255,0.05); color: #888; border: 1px solid #333; padding: 12px; border-radius: 10px; cursor: pointer; font-size: 10px; text-transform: uppercase; }
+        .pos-btn { background: rgba(255,255,255,0.05); color: #888; border: 1px solid #333; padding: 12px; border-radius: 10px; cursor: pointer; font-size: 10px; }
         .pos-btn.selected { border-color: #bf953f; color: #fff; background: rgba(191, 149, 63, 0.3); }
     </style>
 </head>
 <body>
 
-    <!-- 3. Banner Top (728x90) -->
-    <div class="ad-container">
+    <!-- Top Banner (728x90) -->
+    <div class="ad-top">
         <script>
             atOptions = { 'key' : 'd399bebc73df20ce064bc87255c85c45', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
         </script>
@@ -52,10 +58,20 @@
 
     <div class="card">
         <h2 id="title">Luxury Spliter</h2>
+        
+        <!-- Step 1: Link (No Skip) -->
         <div id="step1" class="step active"><label id="l_link">ဗီဒီယိုလင့်ခ်</label><input type="text" id="vLink" placeholder="https://..."><button class="btn-gold" onclick="v_link()">ရှေ့သို့</button></div>
+        
+        <!-- Step 2: Name (Skipable) -->
         <div id="step2" class="step"><label id="l_name">ဇာတ်ကားအမည်</label><input type="text" id="vName" value="movie"><button class="btn-gold" onclick="next(3)">ရှေ့သို့</button><button class="skip-btn" onclick="next(3)">ကျော်မည်</button></div>
+        
+        <!-- Step 3: Duration (Skipable) -->
         <div id="step3" class="step"><label id="l_time">ဖြတ်မည့်မိနစ်</label><input type="text" id="vLen" value="5:00"><button class="btn-gold" onclick="next(4)">ရှေ့သို့</button><button class="skip-btn" onclick="next(4)">ကျော်မည်</button></div>
+        
+        <!-- Step 4: Watermark (Skipable) -->
         <div id="step4" class="step"><label id="l_wm">Watermark</label><input type="text" id="vWm" placeholder="..."><button class="btn-gold" onclick="next(5)">ရှေ့သို့</button><button class="skip-btn" onclick="skip_wm()">ကျော်မည်</button></div>
+        
+        <!-- Step 5: Logo & Final Submit (Skipable) -->
         <div id="step5" class="step">
             <label id="l_logo">လိုဂိုတင်ရန်</label><input type="file" id="vLogo" accept="image/*" onchange="h_file(this)">
             <div class="pos-grid">
@@ -67,8 +83,8 @@
         </div>
     </div>
 
-    <!-- 4. Banner Bottom (468x60) -->
-    <div class="ad-container">
+    <!-- Bottom Banner (468x60) -->
+    <div class="ad-bottom">
         <script>
             atOptions = { 'key' : 'b3be95eaddc2ac3ec2323b160e5ea5f5', 'format' : 'iframe', 'height' : 60, 'width' : 468, 'params' : {} };
         </script>
@@ -83,24 +99,18 @@
         tg.expand();
 
         db.collection('users').doc(uid).get().then(doc => {
-            if(doc.exists) {
-                userLang = doc.data().lang || "my";
-                applyLang(userLang);
-            }
+            if(doc.exists) { userLang = doc.data().lang || "my"; applyLang(userLang); }
         });
 
         function applyLang(l) {
             const t = { 
-                en: { link: "Video Link", name: "Movie Name", time: "Split Time", wm: "Watermark", logo: "Logo Image", start: "🚀 START SPLIT" }, 
-                my: { link: "ဗီဒီယိုလင့်ခ်", name: "ဇာတ်ကားအမည်", time: "ဖြတ်မည့်မိနစ်", wm: "Watermark စာသား", logo: "လိုဂိုတင်ရန်", start: "🚀 စတင်ဖြတ်မည်" } 
+                en: { link: "Video Link", name: "Movie Name", time: "Split Time", wm: "Watermark", logo: "Logo Image", start: "🚀 START SPLIT", skip: "Skip", next: "Next" }, 
+                my: { link: "ဗီဒီယိုလင့်ခ်", name: "ဇာတ်ကားအမည်", time: "ဖြတ်မည့်မိနစ်", wm: "Watermark စာသား", logo: "လိုဂိုတင်ရန်", start: "🚀 စတင်ဖြတ်မည်", skip: "ကျော်မည်", next: "ရှေ့သို့" } 
             };
             const c = t[l] || t.my;
-            document.getElementById('l_link').innerText = c.link; 
-            document.getElementById('l_name').innerText = c.name; 
-            document.getElementById('l_time').innerText = c.time; 
-            document.getElementById('l_wm').innerText = c.wm; 
-            document.getElementById('l_logo').innerText = c.logo;
+            document.querySelectorAll('.skip-btn').forEach(b => b.innerText = c.skip);
             document.getElementById('finalBtn').innerText = c.start;
+            // ကျန်သည့် Labels များကိုလည်း ဤနေရာတွင် Language ညှိနိုင်သည်
         }
 
         function v_link() { if(document.getElementById('vLink').value) next(2); else alert("Link Required!"); }
@@ -111,8 +121,8 @@
         
         async function h_process() {
             const btn = document.getElementById('finalBtn');
-            btn.disabled = true; 
-            btn.innerText = (userLang === 'my') ? "ခဏစောင့်ပါ..." : "Please wait...";
+            btn.disabled = true; btn.innerText = (userLang === 'my') ? "ခဏစောင့်ပါ..." : "Processing...";
+            
             await db.collection('tasks').add({ 
                 user_id: uid, value: document.getElementById('vLink').value, 
                 name: document.getElementById('vName').value || "movie", 
@@ -121,7 +131,9 @@
                 status: 'pending', last_sent_index: -1, lang: userLang, 
                 createdAt: firebase.firestore.FieldValue.serverTimestamp() 
             });
-            setTimeout(() => { tg.close(); }, 1500);
+            
+            // Task ပို့ပြီးတာနဲ့ Bot မှာ စာချက်ချင်းတက်လာဖို့ ၁.၂ စက္ကန့် စောင့်ပြီးမှ ပိတ်မယ်
+            setTimeout(() => { tg.close(); }, 1200);
         }
     </script>
 </body>
