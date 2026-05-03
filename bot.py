@@ -24,7 +24,7 @@ async def run_bot():
     # app.py မှာသုံးထားတဲ့ Menu တွေကို ပျောက်မသွားအောင် ပြန်ပေါ်စေမယ့် function
     def get_menu_keyboard(lang):
         open_text = "🚀 Mini App ဖွင့်ရန်" if lang == 'my' else "🚀 Open Mini App"
-        profile_text = "👤 My Profile" if lang == 'my' else "👤 My Profile"
+        profile_text = "👤 ကျွန်ုပ်၏ ပရိုဖိုင်" if lang == 'my' else "👤 My Profile"
         buy_text = "💎 Premium ဝယ်ရန်" if lang == 'my' else "💎 Buy Premium"
         
         # Telethon style ReplyMarkup (app.py ထဲက Keyboard နဲ့ တစ်ထပ်တည်း)
