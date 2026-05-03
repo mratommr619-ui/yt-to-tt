@@ -18,13 +18,16 @@ async def run_bot():
     session_str = os.environ.get("SESSION_STRING", "")
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
     await client.start()
-    print("🚀 Bot Connected! Full Original Logic Restored.")
+    print("🚀 Bot Connected! Multi-language Logic Restored.")
     
     WEB_URL = os.getenv("WEB_APP_URL", "https://yttott-28862.web.app/")
 
     def get_menu(lang):
-        opt = {"my": ["🚀 Mini App ဖွင့်ရန်", "👤 My Profile", "💎 Premium ဝယ်ရန်"],
-               "en": ["🚀 Open Mini App", "👤 My Profile", "💎 Buy Premium"]}
+        # စာသားများကို app.py နှင့် တိကျစွာ ညှိထားပါသည်
+        opt = {
+            "my": ["🚀 Mini App ဖွင့်ရန်", "👤 My Profile", "💎 Premium ဝယ်ရန်"],
+            "en": ["🚀 Open Mini App", "👤 My Profile", "💎 Buy Premium"]
+        }
         l = lang if lang in opt else "my"
         return types.ReplyKeyboardMarkup(rows=[
             types.KeyboardRow(buttons=[types.KeyboardButtonWebApp(text=opt[l][0], url=WEB_URL)]),
@@ -33,10 +36,8 @@ async def run_bot():
 
     while True:
         try:
-            # ၃။ Queue System: Processing ဖြစ်နေတာကို အရင်ကိုင် (Restart ဖြစ်ရင် ဆက်လုပ်နိုင်ရန်)
+            # ၃။ Queue System: Processing ကို အရင်ရှာ၊ မရှိမှ Pending ယူ
             tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "processing")).limit(1).get()
-            
-            # Processing မရှိမှသာ Pending ထဲက အစောဆုံးတစ်ခုကို ယူသည် (One by one logic)
             if not tasks:
                 tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "pending")).order_by("createdAt", direction=firestore.Query.ASCENDING).limit(1).get()
 
@@ -51,18 +52,20 @@ async def run_bot():
             if not v_url:
                 ref.delete(); continue
 
-            # --- [ Phase 1: Acknowledgement ] ---
+            # --- [ Phase 1: Acknowledgement (Multi-Language) ] ---
             if data.get('status') == 'pending':
-                # Processing မစခင် လက်ခံရရှိကြောင်း အရင်ပို့သည်
-                ack = ("ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပေးပါ။ Split Video များရရှိပါက ပို့ဆောင်ပေးထားပါ့မယ်။\n"
-                       "အခြားလုပ်စရာရှိတာများကို စိတ်ချလက်ချ လုပ်ဆောင်ပြီး ဒီဟာကို ပစ်ထားခဲ့ပါ။") if lang == 'my' else \
-                      ("Video received! Please wait. Your split videos will be sent once ready. "
-                       "Feel free to leave this and attend to your other tasks.")
+                if lang == 'my':
+                    ack = ("ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပေးပါ။ Split Video များရရှိပါက ပို့ဆောင်ပေးထားပါ့မယ်။\n"
+                           "အခြားလုပ်စရာရှိတာများကို စိတ်ချလက်ချ လုပ်ဆောင်ပြီး ဒီဟာကို ပစ်ထားခဲ့ပါ။")
+                else:
+                    ack = ("Video received! Please wait. Your split videos will be sent once ready. "
+                           "Feel free to leave this and attend to your other tasks.")
+                
                 await client.send_message(uid, ack, buttons=get_menu(lang))
                 ref.update({'status': 'processing'})
 
             # --- [ Phase 2: Parameters & Defaults ] ---
-            m_name = data.get('name') or "Movie Name"
+            m_name = data.get('name') or ("Movie Name" if lang == 'en' else "Movie Name")
             split_time = data.get('len') or "5:00"
             wm_text = data.get('wm', '')
             last_sent = data.get('last_sent_index', -1)
@@ -79,12 +82,10 @@ async def run_bot():
             # --- [ Phase 4: FFmpeg Splitting ] ---
             os.makedirs("parts", exist_ok=True)
             if not os.listdir("parts"):
-                # Split Time Calculation
                 dur_parts = list(map(int, reversed(split_time.split(':'))))
                 dur_sec = sum(x * 60**i for i, x in enumerate(dur_parts))
                 
                 v_inputs = ['-i', 'vid.mp4']
-                # Bouncing Watermark Logic
                 wm_logic = "x='(w-text_w)/2+(w-text_w)/2*sin(t/2)':y='(h-text_h)/2+(h-text_h)/2*sin(t/3)'"
                 drawtext = f"drawtext=text='{wm_text}':{wm_logic}:fontfile='Pyidaungsu.ttf':fontcolor=white@0.4:fontsize=50" if wm_text else "null"
 
@@ -92,9 +93,7 @@ async def run_bot():
                     with open("logo.png", "wb") as f:
                         f.write(base64.b64decode(data['logo_data'].split(",")[1]))
                     v_inputs += ['-i', 'logo.png']
-                    # Position mapping
                     pos = {"tr": "W-w-15:15", "tl": "15:15", "br": "W-w-15:H-h-15", "bl": "15:H-h-15"}.get(data.get('pos', 'tr'), "W-w-15:15")
-                    # Logo Size 150px & 60% Transparency (aa=0.6)
                     f_complex = f"[1:v]scale=150:-1,format=rgba,colorchannelmixer=aa=0.6[l];[0:v]{drawtext}[v1];[v1][l]overlay={pos}"
                     filter_params = ['-filter_complex', f_complex]
                 else:
@@ -105,27 +104,29 @@ async def run_bot():
                     '-f', 'segment', '-segment_time', str(dur_sec), '-reset_timestamps', '1', 'parts/p_%03d.mp4'
                 ], check=True)
                 
-                # Disk Space Saving: မူရင်းဖိုင်ကို ချက်ချင်းဖျက်သည်
                 if os.path.exists("vid.mp4"): os.remove("vid.mp4")
                 if os.path.exists("logo.png"): os.remove("logo.png")
 
-            # --- [ Phase 5: Smart Upload (Resumable) ] ---
+            # --- [ Phase 5: Smart Upload (Resumable + Multi-Lang) ] ---
             files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
-            p_lbl = "အပိုင်း" if lang == 'my' else "Part"
             
             for idx, p in enumerate(files):
                 if idx > last_sent:
-                    caption = f"🎬 {m_name} - {p_lbl} ({idx+1})"
-                    if idx + 1 == len(files): caption += "\n\n(ဇာတ်သိမ်းပိုင်း) ✅"
+                    current_idx = idx + 1
+                    # Language based Caption
+                    p_label = "အပိုင်း" if lang == 'my' else "Part"
+                    caption = f"🎬 {m_name} - {p_label} ({current_idx})"
+                    
+                    if current_idx == len(files):
+                        caption += "\n\n(ဇာတ်သိမ်းပိုင်း) ✅" if lang == 'my' else "\n\n(End Part) ✅"
                     
                     await client.send_file(uid, f"parts/{p}", caption=caption, buttons=get_menu(lang))
-                    # ပို့ပြီးတိုင်း Database တွင် Update လုပ်သည်
                     ref.update({'last_sent_index': idx})
 
             # --- [ Phase 6: Completion ] ---
             ref.delete()
             shutil.rmtree("parts")
-            print(f"✅ Job Finished: {m_name} for User {uid}")
+            print(f"✅ Job Finished for User {uid}")
 
         except Exception as e:
             print(f"🚨 Error: {e}"); await asyncio.sleep(10)
