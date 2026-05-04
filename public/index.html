@@ -2,45 +2,53 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <title>Luxury Spliter Pro</title>
     
-    <!-- SDKs -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-    <!-- 1. Adsterra Popunder Script -->
     <script src="https://heavenlysuspicious.com/05/d1/b8/05d1b83f15627bbec3a9dda0da58b3be.js"></script>
-    
-    <!-- 2. Adsterra Social Bar Script -->
     <script src="https://heavenlysuspicious.com/5b/eb/97/5beb971a0befc04b29f08c6168cf169b.js"></script>
 
     <style>
         :root { --gold: linear-gradient(45deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c); --dark: #000; }
-        body { 
+        
+        /* Screen Fix: ပုံသေဖြစ်အောင်လုပ်ထားသည် */
+        html, body { 
+            height: 100%; width: 100%; overflow: hidden; 
             background: var(--dark); color: #fff; font-family: sans-serif; 
-            margin: 0; padding: 75px 0; /* Banners အတွက် နေရာလွတ် */
-            display: flex; flex-direction: column; align-items: center; 
-            min-height: 100vh; justify-content: center; overflow-x: hidden; 
+            margin: 0; padding: 0; position: fixed; 
         }
 
-        /* Fixed Banners CSS */
-        .ad-top { position: fixed; top: 0; left: 0; width: 100%; height: 90px; z-index: 1000; display: flex; justify-content: center; background: rgba(0,0,0,0.8); }
-        .ad-bottom { position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; z-index: 1000; display: flex; justify-content: center; background: rgba(0,0,0,0.8); }
+        body {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+
+        /* Fixed Banners */
+        .ad-top { position: fixed; top: 0; left: 0; width: 100%; height: 90px; z-index: 1000; display: flex; justify-content: center; background: #000; overflow: hidden; }
+        .ad-bottom { position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; z-index: 1000; display: flex; justify-content: center; background: #000; overflow: hidden; }
 
         .card { 
             background: rgba(255,255,255,0.05); backdrop-filter: blur(25px); padding: 25px; 
             border-radius: 28px; border: 1px solid rgba(191,149,63,0.3); 
-            width: 90%; max-width: 360px; text-align: center; position: relative; z-index: 100;
+            width: 85%; max-width: 360px; text-align: center; position: relative; z-index: 100;
+            margin-top: 30px; /* Banner နဲ့ မငြိအောင် */
         }
         
-        h2 { background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; font-size: 20px; margin-bottom: 25px; font-weight: 800; }
-        .step { display: none; flex-direction: column; gap: 15px; } .active { display: flex; }
+        h2 { background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; font-size: 20px; margin-bottom: 20px; font-weight: 800; }
+        .step { display: none; flex-direction: column; gap: 15px; } 
+        .active { display: flex; }
+        
         label { color: #bf953f; font-size: 11px; text-align: left; font-weight: bold; text-transform: uppercase; margin-bottom: -5px; }
         input { width: 100%; padding: 14px; background: rgba(255,255,255,0.1); border: 1px solid rgba(191,149,63,0.2); border-radius: 12px; color: #fff; box-sizing: border-box; outline: none; }
-        .btn-gold { background: var(--gold); color: #000; font-weight: bold; padding: 16px; border-radius: 15px; border: none; cursor: pointer; text-transform: uppercase; margin-top: 10px; }
-        .skip-btn { background: transparent; color: #888; border: 1px solid #444; padding: 10px; border-radius: 12px; cursor: pointer; font-size: 11px; margin-top: 5px; border: none; }
+        
+        .btn-gold { background: var(--gold); color: #000; font-weight: bold; padding: 16px; border-radius: 15px; border: none; cursor: pointer; text-transform: uppercase; margin-top: 10px; transition: 0.3s; }
+        .btn-gold:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .skip-btn { background: transparent; color: #888; border: none; padding: 10px; cursor: pointer; font-size: 11px; margin-top: 5px; }
+        
         .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
         .pos-btn { background: rgba(255,255,255,0.05); color: #888; border: 1px solid #333; padding: 12px; border-radius: 10px; cursor: pointer; font-size: 10px; }
         .pos-btn.selected { border-color: #bf953f; color: #fff; background: rgba(191, 149, 63, 0.3); }
@@ -48,58 +56,88 @@
 </head>
 <body>
 
-    <!-- Top Banner (728x90) -->
     <div class="ad-top">
-        <script>
+        <script type="text/javascript">
             atOptions = { 'key' : 'd399bebc73df20ce064bc87255c85c45', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
         </script>
-        <script src="https://heavenlysuspicious.com/d399bebc73df20ce064bc87255c85c45/invoke.js"></script>
+        <script type="text/javascript" src="https://heavenlysuspicious.com/d399bebc73df20ce064bc87255c85c45/invoke.js"></script>
     </div>
 
     <div class="card">
         <h2 id="title">Luxury Spliter</h2>
         
-        <!-- Step 1: Link (No Skip) -->
-        <div id="step1" class="step active"><label id="l_link">ဗီဒီယိုလင့်ခ်</label><input type="text" id="vLink" placeholder="https://..."><button class="btn-gold" onclick="v_link()">ရှေ့သို့</button></div>
+        <div id="step1" class="step active">
+            <label id="l_link">ဗီဒီယိုလင့်ခ်</label>
+            <input type="text" id="vLink" placeholder="https://...">
+            <button class="btn-gold" onclick="v_link()">ရှေ့သို့</button>
+        </div>
         
-        <!-- Step 2: Name (Skipable) -->
-        <div id="step2" class="step"><label id="l_name">ဇာတ်ကားအမည်</label><input type="text" id="vName" value="movie"><button class="btn-gold" onclick="next(3)">ရှေ့သို့</button><button class="skip-btn" onclick="next(3)">ကျော်မည်</button></div>
+        <div id="step2" class="step">
+            <label id="l_name">ဇာတ်ကားအမည်</label>
+            <input type="text" id="vName" value="movie">
+            <button class="btn-gold" onclick="next(3)">ရှေ့သို့</button>
+            <button class="skip-btn" onclick="next(3)">ကျော်မည်</button>
+        </div>
         
-        <!-- Step 3: Duration (Skipable) -->
-        <div id="step3" class="step"><label id="l_time">ဖြတ်မည့်မိနစ်</label><input type="text" id="vLen" value="5:00"><button class="btn-gold" onclick="next(4)">ရှေ့သို့</button><button class="skip-btn" onclick="next(4)">ကျော်မည်</button></div>
+        <div id="step3" class="step">
+            <label id="l_time">ဖြတ်မည့်မိနစ်</label>
+            <input type="text" id="vLen" value="5:00">
+            <button class="btn-gold" onclick="next(4)">ရှေ့သို့</button>
+            <button class="skip-btn" onclick="next(4)">ကျော်မည်</button>
+        </div>
         
-        <!-- Step 4: Watermark (Skipable) -->
-        <div id="step4" class="step"><label id="l_wm">Watermark</label><input type="text" id="vWm" placeholder="..."><button class="btn-gold" onclick="next(5)">ရှေ့သို့</button><button class="skip-btn" onclick="skip_wm()">ကျော်မည်</button></div>
+        <div id="step4" class="step">
+            <label id="l_wm">Watermark</label>
+            <input type="text" id="vWm" placeholder="...">
+            <button class="btn-gold" onclick="next(5)">ရှေ့သို့</button>
+            <button class="skip-btn" onclick="skip_wm()">ကျော်မည်</button>
+        </div>
         
-        <!-- Step 5: Logo & Final Submit (Skipable) -->
         <div id="step5" class="step">
-            <label id="l_logo">လိုဂိုတင်ရန်</label><input type="file" id="vLogo" accept="image/*" onchange="h_file(this)">
+            <label id="l_logo">လိုဂိုတင်ရန်</label>
+            <input type="file" id="vLogo" accept="image/*" onchange="h_file(this)">
             <div class="pos-grid">
-                <button id="tl" class="pos-btn" onclick="setPos('tl', this)">TL</button><button id="tr" class="pos-btn selected" onclick="setPos('tr', this)">TR</button>
-                <button id="bl" class="pos-btn" onclick="setPos('bl', this)">BL</button><button id="br" class="pos-btn" onclick="setPos('br', this)">BR</button>
+                <button id="tl" class="pos-btn" onclick="setPos('tl', this)">TL</button>
+                <button id="tr" class="pos-btn selected" onclick="setPos('tr', this)">TR</button>
+                <button id="bl" class="pos-btn" onclick="setPos('bl', this)">BL</button>
+                <button id="br" class="pos-btn" onclick="setPos('br', this)">BR</button>
             </div>
             <button id="finalBtn" class="btn-gold" onclick="h_process()">🚀 စတင်ဖြတ်မည်</button>
             <button class="skip-btn" onclick="h_process()">ကျော်မည်</button>
         </div>
     </div>
 
-    <!-- Bottom Banner (468x60) -->
     <div class="ad-bottom">
-        <script>
+        <script type="text/javascript">
             atOptions = { 'key' : 'b3be95eaddc2ac3ec2323b160e5ea5f5', 'format' : 'iframe', 'height' : 60, 'width' : 468, 'params' : {} };
         </script>
-        <script src="https://heavenlysuspicious.com/b3be95eaddc2ac3ec2323b160e5ea5f5/invoke.js"></script>
+        <script type="text/javascript" src="https://heavenlysuspicious.com/b3be95eaddc2ac3ec2323b160e5ea5f5/invoke.js"></script>
     </div>
 
     <script>
         firebase.initializeApp({ projectId: "yttott-28862" });
-        const db = firebase.firestore(), tg = window.Telegram.WebApp, uid = tg.initDataUnsafe?.user?.id?.toString() || "1715890141";
+        const db = firebase.firestore(), tg = window.Telegram.WebApp;
+        const uid = tg.initDataUnsafe?.user?.id?.toString() || "1715890141";
         let logoData = "", selectedPos = "tr", userLang = "my";
 
         tg.expand();
+        tg.disableVerticalSwiping(); // Screen မရွေ့အောင် Telegram ဘက်ကပါ ပိတ်ထားသည်
 
+        // ✅ URL မှ Link ကို Auto-fill လုပ်ပေးသည့် Logic
+        window.onload = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const autoLink = urlParams.get('link');
+            if (autoLink) {
+                document.getElementById('vLink').value = decodeURIComponent(autoLink);
+            }
+        };
+
+        // ဘာသာစကား သိမ်းဆည်းမှု စစ်ဆေးသည်
         db.collection('users').doc(uid).get().then(doc => {
-            if(doc.exists) { userLang = doc.data().lang || "my"; applyLang(userLang); }
+            if(doc.exists) { 
+                userLang = doc.data().lang || "my"; 
+                applyLang(userLang); 
+            }
         });
 
         function applyLang(l) {
@@ -110,30 +148,70 @@
             const c = t[l] || t.my;
             document.querySelectorAll('.skip-btn').forEach(b => b.innerText = c.skip);
             document.getElementById('finalBtn').innerText = c.start;
-            // ကျန်သည့် Labels များကိုလည်း ဤနေရာတွင် Language ညှိနိုင်သည်
+            document.getElementById('l_link').innerText = c.link;
+            document.getElementById('l_name').innerText = c.name;
+            document.getElementById('l_time').innerText = c.time;
+            document.getElementById('l_wm').innerText = c.wm;
+            document.getElementById('l_logo').innerText = c.logo;
         }
 
-        function v_link() { if(document.getElementById('vLink').value) next(2); else alert("Link Required!"); }
-        function next(n) { document.querySelectorAll('.step').forEach(s => s.classList.remove('active')); document.getElementById('step' + n).classList.add('active'); }
-        function setPos(p, b) { selectedPos = p; document.querySelectorAll('.pos-btn').forEach(btn => btn.classList.remove('selected')); b.classList.add('selected'); }
+        function v_link() { 
+            if(document.getElementById('vLink').value) next(2); 
+            else alert(userLang === 'my' ? "Link ထည့်ပေးပါ!" : "Link Required!"); 
+        }
+
+        function next(n) { 
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active')); 
+            document.getElementById('step' + n).classList.add('active'); 
+        }
+
+        function setPos(p, b) { 
+            selectedPos = p; 
+            document.querySelectorAll('.pos-btn').forEach(btn => btn.classList.remove('selected')); 
+            b.classList.add('selected'); 
+        }
+
         function skip_wm() { document.getElementById('vWm').value = ""; next(5); }
-        function h_file(i) { const f = i.files[0]; if(f && f.size <= 1048576) { const r = new FileReader(); r.onload = (e) => { logoData = e.target.result; }; r.readAsDataURL(f); } }
+
+        function h_file(i) { 
+            const f = i.files[0]; 
+            if(f && f.size <= 1048576) { 
+                const r = new FileReader(); 
+                r.onload = (e) => { logoData = e.target.result; }; 
+                r.readAsDataURL(f); 
+            } else {
+                alert(userLang === 'my' ? "Logo က 1MB ထက် မကျော်ရပါ!" : "Logo must be under 1MB!");
+                i.value = "";
+            }
+        }
         
         async function h_process() {
             const btn = document.getElementById('finalBtn');
-            btn.disabled = true; btn.innerText = (userLang === 'my') ? "ခဏစောင့်ပါ..." : "Processing...";
+            btn.disabled = true; 
+            btn.innerText = (userLang === 'my') ? "ခဏစောင့်ပါ..." : "Processing...";
             
-            await db.collection('tasks').add({ 
-                user_id: uid, value: document.getElementById('vLink').value, 
-                name: document.getElementById('vName').value || "movie", 
-                len: document.getElementById('vLen').value || "5:00", 
-                logo_data: logoData, pos: selectedPos, wm: document.getElementById('vWm').value || "", 
-                status: 'pending', last_sent_index: -1, lang: userLang, 
-                createdAt: firebase.firestore.FieldValue.serverTimestamp() 
-            });
-            
-            // Task ပို့ပြီးတာနဲ့ Bot မှာ စာချက်ချင်းတက်လာဖို့ ၁.၂ စက္ကန့် စောင့်ပြီးမှ ပိတ်မယ်
-            setTimeout(() => { tg.close(); }, 1200);
+            try {
+                await db.collection('tasks').add({ 
+                    user_id: uid, 
+                    value: document.getElementById('vLink').value, 
+                    name: document.getElementById('vName').value || "movie", 
+                    len: document.getElementById('vLen').value || "5:00", 
+                    logo_data: logoData, 
+                    pos: selectedPos, 
+                    wm: document.getElementById('vWm').value || "", 
+                    status: 'pending', 
+                    last_sent_index: -1, 
+                    lang: userLang, 
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp() 
+                });
+                
+                // Task ပို့ပြီးလျှင် Bot သို့ ပြန်သွားရန်
+                setTimeout(() => { tg.close(); }, 1200);
+            } catch (e) {
+                alert("Error: " + e.message);
+                btn.disabled = false;
+                btn.innerText = (userLang === 'my') ? "ပြန်ကြိုးစားမည်" : "Retry";
+            }
         }
     </script>
 </body>
