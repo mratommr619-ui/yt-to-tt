@@ -4,13 +4,16 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 # --- [ Configuration ] ---
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEB_URL = os.getenv("WEB_APP_URL", "https://yttott-28862.web.app/")
-SERVER_URL = os.getenv("SERVER_URL", "") 
+
+# Render က အလိုအလျောက်ပေးသော External URL ကို သုံးသည်
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "") 
 ADMIN_ID = 1715890141
 
 KPAY, AYAPAY, BEP20 = "09695616591", "09695616591", "0x56824c51be35937da7E60a6223E82cD1795984cC"
@@ -21,7 +24,33 @@ if not firebase_admin._apps:
 db = firestore.client()
 app = Client("luxury_spliter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# --- [ Original Text Logic ] ---
+# --- [ Render Survival Logic (Health Server & Self-Ping) ] ---
+
+def run_health_server():
+    """Render က Port ရှာတွေ့အောင် လုပ်ပေးသော server"""
+    port = int(os.getenv("PORT", 8080))
+    handler = http.server.SimpleHTTPRequestHandler
+    httpd = http.server.HTTPServer(('', port), handler)
+    print(f"🖥️ Internal Health Server active on port {port}")
+    httpd.serve_forever()
+
+def self_ping():
+    """Render က Bot ကို အိပ်မပျော်အောင် ၁၀ မိနစ်တစ်ခါ ပြန်နှိုးသော logic"""
+    if not RENDER_URL:
+        print("⚠️ RENDER_EXTERNAL_URL မရှိလို့ Self-ping အလုပ်မလုပ်ပါ။")
+        return
+    
+    print(f"📡 Self-ping started for {RENDER_URL}")
+    while True:
+        try:
+            time.sleep(600) # ၁၀ မိနစ် (၆၀၀ စက္ကန့်)
+            r = requests.get(RENDER_URL)
+            print(f"💓 Heartbeat sent to {RENDER_URL}: Status {r.status_code}")
+        except Exception as e:
+            print(f"🚨 Ping Error: {e}")
+
+# --- [ Text Dictionary ] ---
+
 TEXTS = {
     'my': {
         'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
@@ -50,25 +79,26 @@ def get_main_kb(lang, web_url=WEB_URL):
     ], resize_keyboard=True)
 
 # --- [ Background Task: Ack Sender ] ---
+
 def ack_listener():
-    """Mini App ကနေ Submit လုပ်လိုက်လို့ Firebase ထဲ Task ရောက်လာရင် Ack message ပို့ပေးမည့် logic"""
+    """Mini App က Submit လုပ်လိုက်ရင် Ack ပို့ပေးမည့် logic"""
     while True:
         try:
-            pendings = db.collection('tasks').where('status', '==', 'pending').get()
+            pendings = db.collection('tasks').where(filter=FieldFilter("status", "==", "pending")).get()
             for p in pendings:
                 data = p.to_dict()
                 uid = int(data.get('user_id', 0))
                 lang = data.get('lang', 'my')
-                # Ack ပို့သည်
-                app.send_message(uid, TEXTS[lang]['ack'], reply_markup=get_main_kb(lang))
-                # Status ကို queued ပြောင်းလိုက်မှ bot.py က အလုပ်စလုပ်မည်
+                try:
+                    app.send_message(uid, TEXTS[lang]['ack'], reply_markup=get_main_kb(lang))
+                except: pass
                 p.reference.update({'status': 'queued'})
             time.sleep(5)
-        except Exception as e:
-            print(f"Ack Error: {e}")
+        except:
             time.sleep(10)
 
 # --- [ Bot Handlers ] ---
+
 @app.on_message(filters.command("start") & filters.private)
 async def start(c, m):
     kb = InlineKeyboardMarkup([[
@@ -85,14 +115,12 @@ async def set_lang(c, q):
     await q.message.delete()
     await c.send_message(uid, TEXTS[lang]['intro'], reply_markup=get_main_kb(lang))
 
-# New: Video Forward Handler
 @app.on_message((filters.video | filters.document) & filters.private)
 async def handle_forward(c, m):
     uid = str(m.from_user.id)
     u_doc = db.collection('users').document(uid).get().to_dict() or {}
     lang = u_doc.get('lang', 'my')
     
-    # Message Link ယူခြင်း
     video_link = f"https://t.me/me/{m.id}"
     encoded_link = urllib.parse.quote(video_link)
     dynamic_url = f"{WEB_URL}?link={encoded_link}"
@@ -114,6 +142,15 @@ async def show_buy(c, m):
     lang = u_doc.get('lang', 'my')
     await m.reply_text(TEXTS[lang]['payment'].format(uid=uid, kpay=KPAY, ayapay=AYAPAY, bep20=BEP20), reply_markup=get_main_kb(lang))
 
+# --- [ Execution ] ---
+
 if __name__ == "__main__":
+    # Render Port Fix
+    threading.Thread(target=run_health_server, daemon=True).start()
+    # Survival Logic (Self-Ping)
+    threading.Thread(target=self_ping, daemon=True).start()
+    # Ack Sender logic
     threading.Thread(target=ack_listener, daemon=True).start()
+    
+    print("🚀 App Bot (Render) is starting with Survival Engine...")
     app.run()
