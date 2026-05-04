@@ -1,6 +1,6 @@
 import os, base64, subprocess, asyncio, firebase_admin, json, shutil, time, urllib.parse
 from firebase_admin import credentials, firestore
-from telethon import TelegramClient, events, types, Button
+from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 from google.cloud.firestore_v1.base_query import FieldFilter
 
@@ -14,48 +14,51 @@ API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
 SESSION_STRING = os.getenv("SESSION_STRING")
 
-# BotFather Screenshot အရ အတိအကျ ပြင်ဆင်ထားသည်
+# BotFather Screenshot အရ အကိုက်ညီဆုံး Link
 BOT_USERNAME = "tt_uploader_bot"  
 APP_SHORT_NAME = "myapp"         
 MINI_APP_LINK = f"https://t.me/{BOT_USERNAME}/{APP_SHORT_NAME}"
-WEB_URL = "https://yttott-28862.web.app/"
 
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
+# Language Dictionary (Firebase lang နဲ့ ညှိထားသည်)
 TEXTS = {
     'my': {
         'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
-        'ack': "ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပေးပါ။ အစီအစဉ်အတိုင်း ပြန်လည်ပို့ဆောင်ပေးပါမည်။",
+        'ack': "ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပေးပါ။",
         'part_label': "အပိုင်း",
         'end_tag': " (ဇာတ်သိမ်းပိုင်း) ✅",
-        'forward_msg': "✅ ဗီဒီယိုကို မှတ်မိပါသည်။ Mini App တွင် အသေးစိတ်ဖြည့်ရန် အောက်ပါခလုတ်ကို နှိပ်ပါ။"
+        'forward_msg': "✅ ဗီဒီယိုကို မှတ်မိပါသည်။ Mini App တွင် အသေးစိတ်ဖြည့်ရန် အောက်ပါခလုတ်ကို နှိပ်ပါ။",
+        'menu_open': "🚀 Mini App ဖွင့်ရန်"
     },
     'en': {
         'intro': "🎬 **Welcome to Movie Spliter Bot**",
-        'ack': "Video received! Please wait. Your split videos will be sent in order.",
+        'ack': "Video received! Please wait.",
         'part_label': "Part",
         'end_tag': " (End Part) ✅",
-        'forward_msg': "✅ Video recognized! Click the button below to fill details in Mini App."
+        'forward_msg': "✅ Video recognized! Click the button below to fill details in Mini App.",
+        'menu_open': "🚀 Open Mini App"
     }
 }
 
-def get_menu(lang):
-    l = lang if lang in TEXTS else 'my'
-    return [[Button.url("🚀 Mini App ဖွင့်ရန်", MINI_APP_LINK)],
-            [Button.text("👤 My Profile"), Button.text("💎 Buy Premium")]]
-
-# --- [ 1. Handle Forward & /start ] ---
+# --- [ 1. Handle Messages & Forward ] ---
 @client.on(events.NewMessage)
 async def handle_messages(event):
     uid = str(event.sender_id)
     user_ref = db.collection('users').document(uid)
     u_doc = user_ref.get()
+    
+    # App.py မှာ ရွေးထားတဲ့ language ကို ယူသုံးခြင်း
     lang = u_doc.to_dict().get('lang', 'my') if u_doc.exists else 'my'
 
     if event.text == '/start':
-        if not u_doc.exists:
-            user_ref.set({'uid': uid, 'lang': 'my', 'is_premium': False, 'expiry_date': 'N/A', 'createdAt': firestore.SERVER_TIMESTAMP})
-        await event.respond(TEXTS[lang]['intro'], buttons=get_menu(lang))
+        await event.respond(
+            TEXTS[lang]['intro'], 
+            buttons=[
+                [Button.url(TEXTS[lang]['menu_open'], MINI_APP_LINK)],
+                [Button.text("👤 My Profile"), Button.text("💎 Buy Premium")]
+            ]
+        )
         return
 
     # Forward Logic: Video Link parameter ဆောက်သည်
@@ -64,7 +67,7 @@ async def handle_messages(event):
         video_url = f"https://t.me/me/{msg_id}" 
         encoded_url = urllib.parse.quote(video_url)
         app_link = f"{MINI_APP_LINK}?startapp={encoded_url}"
-        await event.respond(TEXTS[lang]['forward_msg'], buttons=[[Button.url("🚀 Open in Mini App", app_link)]])
+        await event.respond(TEXTS[lang]['forward_msg'], buttons=[[Button.url(TEXTS[lang]['menu_open'], app_link)]])
 
 # --- [ 2. Background Ack Handler ] ---
 async def ack_handler():
@@ -79,10 +82,11 @@ async def ack_handler():
             await asyncio.sleep(5)
         except: await asyncio.sleep(10)
 
-# --- [ 3. Worker Engine (All Functions Restored) ] ---
+# --- [ 3. Worker Engine (All Original Functions Restored) ] ---
 async def worker_engine():
     while True:
         try:
+            # Processing ဖြစ်နေတာရှိရင် resume လုပ်မယ်
             tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "processing")).limit(1).get()
             if not tasks:
                 tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "queued")).order_by("createdAt", direction=firestore.Query.ASCENDING).limit(1).get()
@@ -99,10 +103,9 @@ async def worker_engine():
                     msg_id = int(v_url.split('/')[-1])
                     msg = await client.get_messages(uid, ids=msg_id)
                     await client.download_media(msg, "vid.mp4")
-                else:
-                    subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
+                else: subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
 
-            # FFmpeg: Logo 60% Alpha + Watermark Restored
+            # FFmpeg: Logo 60% Alpha + Watermark
             os.makedirs("parts", exist_ok=True)
             if not os.listdir("parts") and os.path.exists("vid.mp4"):
                 dur = sum(x * 60**i for i, x in enumerate(map(int, reversed((data.get('len') or "5:00").split(':')))))
@@ -125,17 +128,17 @@ async def worker_engine():
             for idx, p in enumerate(files):
                 if idx > ls_idx:
                     curr = idx + 1
+                    # ⚠️ ဤနေရာတွင် lang အလိုက် Caption ပြောင်းလဲပါသည်
                     caption = f"🎬 {movie_name} - {TEXTS[lang]['part_label']} ({curr})"
                     if curr == total_parts: caption += TEXTS[lang]['end_tag']
-                    await client.send_file(uid, f"parts/{p}", caption=caption, buttons=get_menu(lang))
+                    await client.send_file(uid, f"parts/{p}", caption=caption)
                     ref.update({'last_sent_index': idx})
 
             ref.delete(); shutil.rmtree("parts")
             if os.path.exists("vid.mp4"): os.remove("vid.mp4")
             if os.path.exists("logo.png"): os.remove("logo.png")
 
-        except Exception as e:
-            print(f"Error: {e}"); await asyncio.sleep(10)
+        except Exception as e: print(f"Error: {e}"); await asyncio.sleep(10)
 
 async def main():
     await client.start()
