@@ -16,6 +16,12 @@ SESSION_STRING = os.getenv("SESSION_STRING")
 
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
+# Error Messages
+ERR_MSG = {
+    'my': "⚠️ စိတ်မရှိပါနဲ့။ ဗီဒီယို ဒေါင်းလုဒ်ဆွဲရာတွင် အမှားအယွင်းရှိနေပါသည်။ လင့်ခ်အမှန်ဖြစ်မဖြစ် ပြန်စစ်ပေးပါ။",
+    'en': "⚠️ Sorry! An error occurred while downloading the video. Please check if the link is correct."
+}
+
 LABEL = {
     'my': {'part': "အပိုင်း", 'end': " (ဇာတ်သိမ်းပိုင်း) ✅"},
     'en': {'part': "Part", 'end': " (End Part) ✅"}
@@ -23,25 +29,46 @@ LABEL = {
 
 async def worker_engine():
     while True:
+        doc_ref = None
         try:
-            # app.py က queued လို့ ပြောင်းပေးလိုက်သော task ကို ယူသည်
+            # Queued ဖြစ်နေသော Task တစ်ခုကို ယူသည်
             tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "queued")).order_by("createdAt", direction=firestore.Query.ASCENDING).limit(1).get()
+            
             if not tasks:
                 await asyncio.sleep(10); continue
             
-            doc = tasks[0]; ref = doc.reference; data = doc.to_dict()
+            doc = tasks[0]; doc_ref = doc.reference; data = doc.to_dict()
             uid, lang, v_url = int(data.get('user_id', 0)), data.get('lang', 'my'), data.get('value', '').strip()
-            ref.update({'status': 'processing'})
+            movie_name = data.get('name', 'Movie')
+            
+            doc_ref.update({'status': 'processing'})
+            print(f"🛠 Processing: {movie_name} for {uid}")
 
-            # Download Logic
-            if not os.path.exists("vid.mp4"):
-                if "t.me/" in v_url:
+            # --- [ Phase 1: Download with Error Check ] ---
+            success = False
+            if "t.me/" in v_url:
+                try:
                     msg_id = int(v_url.split('/')[-1])
                     msg = await client.get_messages(uid, ids=msg_id)
-                    await client.download_media(msg, "vid.mp4")
-                else: subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
+                    if msg and (msg.video or msg.document):
+                        await client.download_media(msg, "vid.mp4")
+                        success = True
+                except: success = False
+            else:
+                # yt-dlp ဖြင့် ဒေါင်းသည် (၅ မိနစ်ထက်ပိုကြာလျှင် Timeout သတ်မှတ်သည်)
+                try:
+                    res = subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], timeout=300)
+                    if res.returncode == 0: success = True
+                except: success = False
 
-            # FFmpeg: Logo 60% Alpha & Moving Watermark
+            # ဒေါင်းလို့မရလျှင် User ဆီ စာပို့ပြီး Task ဖျက်ကာ ကျော်သွားမည်
+            if not success or not os.path.exists("vid.mp4"):
+                await client.send_message(uid, ERR_MSG[lang])
+                doc_ref.delete()
+                print(f"❌ Failed to download {movie_name}. Task deleted.")
+                continue
+
+            # --- [ Phase 2: FFmpeg Split ] ---
             os.makedirs("parts", exist_ok=True)
             dur = sum(x * 60**i for i, x in enumerate(map(int, reversed((data.get('len') or "5:00").split(':')))))
             wm = data.get('wm', '')
@@ -57,25 +84,41 @@ async def worker_engine():
             else:
                 subprocess.run(['ffmpeg', '-y'] + v_in + ['-vf', drawtext, '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'copy', '-f', 'segment', '-segment_time', str(dur), '-reset_timestamps', '1', 'parts/p_%03d.mp4'], check=True)
 
-            # Delivery
+            # --- [ Phase 3: Delivery ] ---
             files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
-            total = len(files)
             for idx, p in enumerate(files):
                 curr = idx + 1
-                caption = f"🎬 {data.get('name', 'Movie')} - {LABEL[lang]['part']} ({curr})"
-                if curr == total: caption += LABEL[lang]['end']
+                caption = f"🎬 {movie_name} - {LABEL[lang]['part']} ({curr})"
+                if curr == len(files): caption += LABEL[lang]['end']
                 await client.send_file(uid, f"parts/{p}", caption=caption)
 
-            # Cleanup
-            ref.delete(); shutil.rmtree("parts")
+            # Task အောင်မြင်စွာ ပြီးဆုံးလျှင် ဖျက်သည်
+            doc_ref.delete()
+            print(f"✅ Success: {movie_name} delivered.")
+
+        except Exception as e:
+            print(f"🚨 Critical Error: {e}")
+            if doc_ref:
+                # Error တက်ခဲ့လျှင် Task ကို ဖျက်ပြီး User ဆီ အသိပေးစာပို့သည်
+                try:
+                    data = doc_ref.get().to_dict()
+                    if data:
+                        uid = int(data.get('user_id', 0))
+                        lang = data.get('lang', 'my')
+                        await client.send_message(uid, ERR_MSG[lang])
+                    doc_ref.delete()
+                except: pass
+            await asyncio.sleep(5)
+        
+        finally:
+            # File များ သန့်ရှင်းရေးလုပ်သည်
+            if os.path.exists("parts"): shutil.rmtree("parts")
             if os.path.exists("vid.mp4"): os.remove("vid.mp4")
             if os.path.exists("logo.png"): os.remove("logo.png")
 
-        except Exception as e: print(f"🚨 Worker Error: {e}"); await asyncio.sleep(10)
-
 async def main():
     await client.start()
-    print("🚀 Worker Engine is running...")
+    print("🚀 Worker Engine is running with Error Handler...")
     await worker_engine()
 
 if __name__ == "__main__":
