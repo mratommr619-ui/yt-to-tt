@@ -6,13 +6,14 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-# --- [ Config ] ---
+# --- [ Configuration ] ---
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEB_URL = os.getenv("WEB_APP_URL", "https://yttott-28862.web.app/")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "") 
 
+ADMIN_ID = 1715890141
 KPAY, AYAPAY, BEP20 = "09695616591", "09695616591", "0x56824c51be35937da7E60a6223E82cD1795984cC"
 
 if not firebase_admin._apps:
@@ -93,20 +94,18 @@ async def set_lang(c, q):
     await q.message.delete()
     await c.send_message(uid, TEXTS[lang]['intro'], reply_markup=get_main_kb(lang))
 
-@app.on_message((filters.video | filters.document) & filters.private)
+@app.on_message((filters.video | filters.document) & filters.private & filters.incoming)
 async def handle_forward(c, m):
+    if m.outgoing: return
     uid = str(m.from_user.id)
     u_doc = db.collection('users').document(uid).get().to_dict() or {}
     lang = u_doc.get('lang', 'my')
     
-    # ✅ Video Link Extraction
     bot_info = await c.get_me()
     video_link = f"https://t.me/{bot_info.username}/{m.id}"
     encoded_link = urllib.parse.quote(video_link)
     
-    # စာသားထဲမှာ လင့်ခ်ကို တစ်ခါတည်း ပြပေးသည် (Mono space ဖြစ်အောင် လုပ်ထားလို့ နှိပ်လိုက်တာနဲ့ copy ဖြစ်မယ်)
     caption = TEXTS[lang]['forward_msg'].format(v_link=video_link)
-    
     inline_kb = InlineKeyboardMarkup([[
         InlineKeyboardButton(TEXTS[lang]['open'], web_app=WebAppInfo(url=f"{WEB_URL}?link={encoded_link}"))
     ]])
