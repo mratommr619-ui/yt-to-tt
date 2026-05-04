@@ -1,39 +1,29 @@
 name: Video Processor
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
   push:
     branches: [ main ]
 
-# ဒီအပိုင်းက IP Error မတက်အောင် အဟောင်းကို သတ်ပေးမယ့်ကောင်
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # ၆ နာရီအထိ ခွင့်ပြုထားတယ်
+    timeout-minutes: 360
 
     steps:
       - uses: actions/checkout@v3
-
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
       - name: Install Tools
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
           pip install telethon firebase-admin yt-dlp
-
       - name: Run Worker
         run: python bot.py
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           SESSION_STRING: ${{ secrets.SESSION_STRING }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          WEB_APP_URL: ${{ secrets.WEB_APP_URL }}
