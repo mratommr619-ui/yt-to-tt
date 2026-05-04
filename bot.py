@@ -32,6 +32,7 @@ async def run_bot():
         async def ack_handler():
             while True:
                 try:
+                    # Pending တွေ့တာနဲ့ စာပို့ပြီး queued ပြောင်းမယ်
                     pendings = db.collection('tasks').where(filter=FieldFilter("status", "==", "pending")).get()
                     for p in pendings:
                         p_data = p.to_dict()
@@ -43,16 +44,20 @@ async def run_bot():
                         
                         await client.send_message(uid, ack, buttons=get_menu(lang))
                         p.reference.update({'status': 'queued'})
+                        print(f"📩 Sent Ack & Marked Queued for {uid}")
                     await asyncio.sleep(3)
-                except: await asyncio.sleep(5)
+                except Exception as e:
+                    print(f"Ack Error: {e}"); await asyncio.sleep(5)
 
         asyncio.create_task(ack_handler())
 
-        # --- [ Main Worker Loop ] ---
+        # --- [ Main Task: Worker ] ---
         while True:
             try:
-                # Processing ဖြစ်နေတာရှိရင် အရင်ဆုံး အပြီးသတ်မယ်
+                # ၁။ Processing ကို အရင်ကြည့်မယ်
                 tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "processing")).limit(1).get()
+                
+                # ၂။ မရှိရင် queued ထဲက အဟောင်းဆုံးကို ယူမယ်
                 if not tasks:
                     tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "queued")).order_by("createdAt", direction=firestore.Query.ASCENDING).limit(1).get()
 
@@ -68,7 +73,7 @@ async def run_bot():
                 if data['status'] == 'queued':
                     ref.update({'status': 'processing'})
 
-                # Download Logic
+                # --- [ Download & Splitting Logic (Original Specs) ] ---
                 if not os.path.exists("vid.mp4"):
                     if "t.me/" in v_url:
                         p = v_url.split('/'); msg_obj = await client.get_messages(p[-2], ids=int(p[-1]))
@@ -76,7 +81,6 @@ async def run_bot():
                     else:
                         subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True, timeout=600)
 
-                # Processing Logic (Original Specs)
                 os.makedirs("parts", exist_ok=True)
                 if not os.listdir("parts"):
                     split_time = data.get('len') or "5:00"
@@ -98,12 +102,12 @@ async def run_bot():
                     if os.path.exists("vid.mp4"): os.remove("vid.mp4")
                     if os.path.exists("logo.png"): os.remove("logo.png")
 
-                # Smart Delivery
+                # --- [ Delivery with Resumable Support ] ---
                 files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
                 last_sent = data.get('last_sent_index', -1)
                 for idx, p in enumerate(files):
                     if idx > last_sent:
-                        m_name = data.get('name') or "Movie Name"
+                        m_name = data.get('name') or "Movie"
                         p_lbl = "အပိုင်း" if lang == 'my' else "Part"
                         cap = f"🎬 {m_name} - {p_lbl} ({idx+1})"
                         if idx + 1 == len(files): cap += "\n\n(ဇာတ်သိမ်းပိုင်း) ✅" if lang == 'my' else "\n\n(End Part) ✅"
@@ -116,11 +120,9 @@ async def run_bot():
             except Exception as e:
                 print(f"🚨 Worker Error: {e}"); await asyncio.sleep(10)
     except Exception as e:
-        print(f"🚨 Bot Crash: {e}"); await asyncio.sleep(20)
+        print(f"🚨 Critical Bot Crash: {e}"); await asyncio.sleep(20)
 
 if __name__ == "__main__":
     while True:
-        try:
-            asyncio.run(run_bot())
-        except:
-            time.sleep(10)
+        try: asyncio.run(run_bot())
+        except: time.sleep(10)
