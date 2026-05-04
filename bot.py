@@ -1,75 +1,104 @@
 import os, base64, subprocess, asyncio, firebase_admin, json, shutil, time, urllib.parse
+from datetime import datetime
 from firebase_admin import credentials, firestore
-from telethon import TelegramClient, events, Button
+from telethon import TelegramClient, events, types, Button
 from telethon.sessions import StringSession
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-# --- [ Firebase & Config ] ---
-if not firebase_admin._apps:
-    cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
-    if cred_json: firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
-db = firestore.client()
-
+# --- [ Configuration ] ---
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
 SESSION_STRING = os.getenv("SESSION_STRING")
+WEB_URL = os.getenv("WEB_APP_URL", "https://yttott-28862.web.app/")
 
-# BotFather Username & App Short Name
-BOT_USERNAME = "tt_uploader_bot"  
-APP_SHORT_NAME = "myapp"         
-MINI_APP_LINK = f"https://t.me/{BOT_USERNAME}/{APP_SHORT_NAME}"
+KPAY, AYAPAY, BEP20 = "09695616591", "09695616591", "0x56824c51be35937da7E60a6223E82cD1795984cC"
+
+if not firebase_admin._apps:
+    cred_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
+    if cred_json: firebase_admin.initialize_app(credentials.Certificate(json.loads(cred_json)))
+db = firestore.client()
 
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
-# Language Sync (Mini App ဘက်က lang အတိုင်း သုံးမည်)
+# --- [ Texts from your app.py ] ---
 TEXTS = {
     'my': {
         'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
+        'open': "🚀 Mini App ဖွင့်ရန်",
+        'profile': "👤 My Profile",
+        'buy': "💎 Premium ဝယ်ရန်",
+        'payment': "💎 **Premium Upgrade**\n\n💰 **၁ လ:** 3000 ကျပ် / 1.0 USDT\n💳 **KPay:** `{kpay}`\n💳 **AYAPay:** `{ayapay}`\n🌐 **BEP20:** `{bep20}`\n⚠️ **Note:** ID `{uid}` ကို Screenshot နှင့်အတူ ပို့ပေးပါ။",
+        'forward_msg': "✅ ဗီဒီယိုကို မှတ်မိပါသည်။ Mini App တွင် အသေးစိတ်ဖြည့်ရန် အောက်ပါခလုတ်ကို နှိပ်ပါ။",
         'ack': "ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပေးပါ။",
         'part_label': "အပိုင်း",
-        'end_tag': " (ဇာတ်သိမ်းပိုင်း) ✅",
-        'forward_msg': "✅ ဗီဒီယိုကို မှတ်မိပါသည်။ Mini App တွင် အသေးစိတ်ဖြည့်ရန် အောက်ပါခလုတ်ကို နှိပ်ပါ။",
-        'btn_open': "🚀 Mini App ဖွင့်ရန်"
+        'end_tag': " (ဇာတ်သိမ်းပိုင်း) ✅"
     },
     'en': {
         'intro': "🎬 **Welcome to Movie Spliter Bot**",
+        'open': "🚀 Open Mini App",
+        'profile': "👤 My Profile",
+        'buy': "💎 Buy Premium",
+        'payment': "💎 **Premium Upgrade**\n\n💰 **1 Month:** 3000 MMK / 1.0 USDT\n💳 **KPay:** `{kpay}`\n💳 **AYAPay:** `{ayapay}`\n🌐 **BEP20:** `{bep20}`\n⚠️ **Note:** Send ID `{uid}` with screenshot.",
+        'forward_msg': "✅ Video recognized! Click the button below to open Mini App.",
         'ack': "Video received! Please wait.",
         'part_label': "Part",
-        'end_tag': " (End Part) ✅",
-        'forward_msg': "✅ Video recognized! Click the button below to fill details in Mini App.",
-        'btn_open': "🚀 Open Mini App"
+        'end_tag': " (End Part) ✅"
     }
 }
 
-# --- [ 1. Handle Messages ] ---
+# Keyboard Builder (Mix Error လုံးဝမတက်အောင် types သုံးပြီး စနစ်တကျ ဆောက်ထားသည်)
+def get_main_kb(lang, webapp_url):
+    return types.ReplyKeyboardMarkup(rows=[
+        types.KeyboardRow([types.KeyboardButtonWebApp(text=TEXTS[lang]['open'], url=webapp_url)]),
+        types.KeyboardRow([types.KeyboardButton(text=TEXTS[lang]['profile']), types.KeyboardButton(text=TEXTS[lang]['buy'])])
+    ], resize=True, persistent=True)
+
+# --- [ 1. Message Handler ] ---
 @client.on(events.NewMessage)
 async def handle_messages(event):
     uid = str(event.sender_id)
     user_ref = db.collection('users').document(uid)
-    u_doc = user_ref.get()
-    lang = u_doc.to_dict().get('lang', 'my') if u_doc.exists else 'my'
+    u_doc = user_ref.get().to_dict() or {}
+    lang = u_doc.get('lang', 'my')
 
+    # Start Command (Language Selection)
     if event.text == '/start':
-        # Inline Button သီးသန့်ပဲ သုံးပါမည် (Error ကင်းစေရန်)
-        await event.respond(
-            TEXTS[lang]['intro'], 
-            buttons=[[Button.url(TEXTS[lang]['btn_open'], MINI_APP_LINK)]]
-        )
+        btns = [[Button.inline("🇲🇲 မြန်မာစာ", b"lang_my"), Button.inline("🇺🇸 English", b"lang_en")]]
+        await event.respond("Choose Language / ဘာသာစကားရွေးချယ်ပါ -", buttons=btns)
         return
 
-    # Forward Logic: Video URL parameter ဆောက်သည်
-    if event.message.video or event.message.document:
-        msg_id = event.message.id
-        video_url = f"https://t.me/me/{msg_id}" 
-        encoded_url = urllib.parse.quote(video_url)
-        app_link = f"{MINI_APP_LINK}?startapp={encoded_url}"
-        
-        await event.respond(
-            TEXTS[lang]['forward_msg'], 
-            buttons=[[Button.url(TEXTS[lang]['btn_open'], app_link)]]
-        )
+    # Profile Display (Matching app.py logic)
+    if event.text in [TEXTS['my']['profile'], TEXTS['en']['profile']]:
+        is_premium = u_doc.get('is_premium', False)
+        exp_str = u_doc.get('expiry_date', 'N/A')
+        status = "Premium Member ✅" if is_premium else "Free Member ❌"
+        msg = f"👤 **User Profile**\n\n🆔 ID: `{uid}`\n👑 Status: **{status}**\n📅 Expiry: `{exp_str}`"
+        await event.respond(msg, buttons=get_main_kb(lang, WEB_URL))
+        return
 
-# --- [ 2. Background Ack Handler ] ---
+    # Premium Buy (Matching app.py logic)
+    if event.text in [TEXTS['my']['buy'], TEXTS['en']['buy']]:
+        msg = TEXTS[lang]['payment'].format(uid=uid, kpay=KPAY, ayapay=AYAPAY, bep20=BEP20)
+        await event.respond(msg, buttons=get_main_kb(lang, WEB_URL))
+        return
+
+    # Forward Video Logic (The Auto-fill Part)
+    if event.message.video or event.message.document:
+        video_link = f"https://t.me/me/{event.message.id}"
+        encoded_link = urllib.parse.quote(video_link)
+        dynamic_url = f"{WEB_URL}?link={encoded_link}"
+        await event.respond(TEXTS[lang]['forward_msg'], buttons=get_main_kb(lang, dynamic_url))
+
+# --- [ 2. Language Callback ] ---
+@client.on(events.CallbackQuery(pattern=b"lang_"))
+async def set_lang(event):
+    lang = event.data.decode().split("_")[1]
+    uid = str(event.sender_id)
+    db.collection('users').document(uid).set({'lang': lang, 'uid': uid, 'is_premium': False, 'expiry_date': 'N/A'}, merge=True)
+    await event.delete()
+    await client.send_message(uid, TEXTS[lang]['intro'], buttons=get_main_kb(lang, WEB_URL))
+
+# --- [ 3. Background Ack Handler ] ---
 async def ack_handler():
     while True:
         try:
@@ -77,12 +106,12 @@ async def ack_handler():
             for p in pendings:
                 data = p.to_dict()
                 uid, lang = int(data.get('user_id', 0)), data.get('lang', 'my')
-                await client.send_message(uid, TEXTS[lang]['ack'])
+                await client.send_message(uid, TEXTS[lang]['ack'], buttons=get_main_kb(lang, WEB_URL))
                 p.reference.update({'status': 'queued'})
             await asyncio.sleep(5)
         except: await asyncio.sleep(10)
 
-# --- [ 3. Worker Engine ] ---
+# --- [ 4. Worker Engine (Processing) ] ---
 async def worker_engine():
     while True:
         try:
@@ -96,15 +125,14 @@ async def worker_engine():
             uid, lang, v_url = int(data.get('user_id', 0)), data.get('lang', 'my'), data.get('value', '').strip()
             if data['status'] == 'queued': ref.update({'status': 'processing'})
 
-            # Download
             if not os.path.exists("vid.mp4"):
                 if "t.me/" in v_url:
                     msg_id = int(v_url.split('/')[-1])
                     msg = await client.get_messages(uid, ids=msg_id)
                     await client.download_media(msg, "vid.mp4")
-                else: subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
+                else:
+                    subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
 
-            # FFmpeg: Logo 60% Alpha + Watermark
             os.makedirs("parts", exist_ok=True)
             if not os.listdir("parts") and os.path.exists("vid.mp4"):
                 dur = sum(x * 60**i for i, x in enumerate(map(int, reversed((data.get('len') or "5:00").split(':')))))
@@ -121,16 +149,13 @@ async def worker_engine():
                 else:
                     subprocess.run(['ffmpeg', '-y'] + v_in + ['-vf', drawtext, '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'copy', '-f', 'segment', '-segment_time', str(dur), '-reset_timestamps', '1', 'parts/p_%03d.mp4'], check=True)
 
-            # Delivery: Multi-lang Caption
             files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
-            ls_idx, movie_name, total_parts = data.get('last_sent_index', -1), data.get('name') or "Movie", len(files)
+            total_parts = len(files)
             for idx, p in enumerate(files):
-                if idx > ls_idx:
-                    curr = idx + 1
-                    caption = f"🎬 {movie_name} - {TEXTS[lang]['part_label']} ({curr})"
-                    if curr == total_parts: caption += TEXTS[lang]['end_tag']
-                    await client.send_file(uid, f"parts/{p}", caption=caption)
-                    ref.update({'last_sent_index': idx})
+                curr = idx + 1
+                caption = f"🎬 {data.get('name', 'Movie')} - {TEXTS[lang]['part_label']} ({curr})"
+                if curr == total_parts: caption += TEXTS[lang]['end_tag']
+                await client.send_file(uid, f"parts/{p}", caption=caption, buttons=get_main_kb(lang, WEB_URL))
 
             ref.delete(); shutil.rmtree("parts")
             if os.path.exists("vid.mp4"): os.remove("vid.mp4")
@@ -138,7 +163,6 @@ async def worker_engine():
 
         except Exception as e: print(f"Error: {e}"); await asyncio.sleep(10)
 
-# --- [ Parallel Run ] ---
 async def main():
     await client.start()
     await asyncio.gather(ack_handler(), worker_engine(), client.run_until_disconnected())
