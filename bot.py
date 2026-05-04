@@ -19,15 +19,15 @@ client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
 TEXTS = {
     'my': {
-        'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**\n\nဗီဒီယိုများတင်ရန် Mini App ကို အသုံးပြုပါ။",
-        'ack': "ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပေးပါ။ Split Video များရရှိပါက ပို့ဆောင်ပေးထားပါ့မယ်။",
+        'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**\n\nForward လုပ်ထားသော ဗီဒီယို သို့မဟုတ် Link များပို့ပေးပါ။",
+        'ack': "ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပေးပါ။ အစီအစဉ်အတိုင်း ပြန်လည်ပို့ဆောင်ပေးပါမည်။",
         'menu': ["🚀 Mini App ဖွင့်ရန်", "👤 My Profile", "💎 Premium ဝယ်ရန်"],
         'part_label': "အပိုင်း",
         'end_tag': " (ဇာတ်သိမ်းပိုင်း) ✅"
     },
     'en': {
-        'intro': "🎬 **Welcome to Movie Spliter Bot**\n\nPlease use the Mini App to upload videos.",
-        'ack': "Video received! Please wait. Your split videos will be sent once ready.",
+        'intro': "🎬 **Welcome to Movie Spliter Bot**\n\nSend me forwarded videos or movie links.",
+        'ack': "Video received! Please wait. Your split videos will be sent in order.",
         'menu': ["🚀 Open Mini App", "👤 My Profile", "💎 Buy Premium"],
         'part_label': "Part",
         'end_tag': " (End Part) ✅"
@@ -36,22 +36,24 @@ TEXTS = {
 
 def get_menu(lang):
     l = lang if lang in TEXTS else 'my'
-    return types.ReplyKeyboardMarkup(rows=[
-        types.KeyboardRow(buttons=[types.KeyboardButtonWebApp(text=TEXTS[l]['menu'][0], url=WEB_URL)]),
-        types.KeyboardRow(buttons=[types.KeyboardButton(text=TEXTS[l]['menu'][1]), types.KeyboardButton(text=TEXTS[l]['menu'][2])])
-    ], resize=True, persistent=True)
+    # Fixed ReplyMarkup for latest Telethon
+    buttons = [
+        [types.KeyboardButtonWebApp(text=TEXTS[l]['menu'][0], url=WEB_URL)],
+        [types.KeyboardButton(text=TEXTS[l]['menu'][1]), types.KeyboardButton(text=TEXTS[l]['menu'][2])]
+    ]
+    return types.ReplyKeyboardMarkup(rows=[types.KeyboardRow(b) for b in buttons], resize=True, persistent=True)
 
-# --- [ 1. /start & Auto Register ] ---
+# --- [ 1. Start Handler & User Register ] ---
 @client.on(events.NewMessage(pattern='/start'))
 async def start_handler(event):
     uid = str(event.sender_id)
     user_ref = db.collection('users').document(uid)
     u_doc = user_ref.get()
-    lang = 'my'
+    lang = u_doc.to_dict().get('lang', 'my') if u_doc.exists else 'my'
+    
     if not u_doc.exists:
         user_ref.set({'uid': uid, 'lang': 'my', 'is_premium': False, 'expiry_date': 'N/A', 'createdAt': firestore.SERVER_TIMESTAMP})
-    else:
-        lang = u_doc.to_dict().get('lang', 'my')
+    
     await event.respond(TEXTS[lang]['intro'], buttons=get_menu(lang))
 
 # --- [ 2. Background Ack Handler ] ---
@@ -64,8 +66,8 @@ async def ack_handler():
                 uid, lang = int(data.get('user_id', 0)), data.get('lang', 'my')
                 await client.send_message(uid, TEXTS[lang]['ack'], buttons=get_menu(lang))
                 p.reference.update({'status': 'queued'})
-            await asyncio.sleep(5)
-        except: await asyncio.sleep(10)
+            await asyncio.sleep(3)
+        except: await asyncio.sleep(5)
 
 # --- [ 3. Main Splitter Engine ] ---
 async def worker_engine():
@@ -75,18 +77,39 @@ async def worker_engine():
             if not tasks:
                 tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "queued")).order_by("createdAt", direction=firestore.Query.ASCENDING).limit(1).get()
 
-            if not tasks: await asyncio.sleep(10); continue
+            if not tasks: await asyncio.sleep(5); continue
             
             doc = tasks[0]; ref = doc.reference; data = doc.to_dict()
             uid, lang, v_url = int(data.get('user_id', 0)), data.get('lang', 'my'), data.get('value', '').strip()
             if data['status'] == 'queued': ref.update({'status': 'processing'})
 
+            # --- [ Phase: Intelligent Download ] ---
             if not os.path.exists("vid.mp4"):
+                print(f"📥 Downloading: {v_url}")
+                # Telegram Forwarded Message OR Link Fix
                 if "t.me/" in v_url:
-                    p = v_url.split('/'); msg = await client.get_messages(p[-2], ids=int(p[-1]))
-                    await client.download_media(msg, "vid.mp4")
-                else: subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
+                    try:
+                        p = v_url.split('/')
+                        # Handling private/public links (t.me/c/xxx/123 or t.me/channel/123)
+                        channel = int(f"-100{p[-2]}") if p[-2].isdigit() else p[-2]
+                        msg = await client.get_messages(channel, ids=int(p[-1]))
+                        await client.download_media(msg, "vid.mp4")
+                    except Exception as e:
+                        print(f"Tele-Download Error: {e}")
+                else:
+                    # yt-dlp with auto-redirect for short URLs and best compatibility
+                    cmd = [
+                        'yt-dlp', 
+                        '--no-check-certificate', 
+                        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        '--follow-redirects',
+                        '-f', 'mp4', 
+                        '-o', 'vid.mp4', 
+                        v_url
+                    ]
+                    subprocess.run(cmd, check=True, timeout=900)
 
+            # --- [ Phase: FFmpeg Processing ] ---
             os.makedirs("parts", exist_ok=True)
             if not os.listdir("parts"):
                 dur = sum(x * 60**i for i, x in enumerate(map(int, reversed((data.get('len') or "5:00").split(':')))))
@@ -103,6 +126,7 @@ async def worker_engine():
                 else:
                     subprocess.run(['ffmpeg', '-y'] + v_in + ['-vf', drawtext, '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'copy', '-f', 'segment', '-segment_time', str(dur), '-reset_timestamps', '1', 'parts/p_%03d.mp4'], check=True)
 
+            # --- [ Phase: Delivery ] ---
             files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
             ls_idx, movie_name, total_parts = data.get('last_sent_index', -1), data.get('name') or "Movie Name", len(files)
             
@@ -123,18 +147,10 @@ async def worker_engine():
         except Exception as e:
             print(f"🚨 Error: {e}"); await asyncio.sleep(10)
 
-# --- [ 4. Entry Point Fixed for Python 3.11 ] ---
+# --- [ Phase: Parallel Execution ] ---
 async def main():
-    # Loop စဖွင့်မှ task တွေကို assign လုပ်ခြင်း
     await client.start()
-    await asyncio.gather(
-        ack_handler(),
-        worker_engine(),
-        client.run_until_disconnected()
-    )
+    await asyncio.gather(ack_handler(), worker_engine(), client.run_until_disconnected())
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        pass
+    asyncio.run(main())
