@@ -14,14 +14,14 @@ API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
 SESSION_STRING = os.getenv("SESSION_STRING")
 
-# BotFather Screenshot အရ အကိုက်ညီဆုံး Link
+# BotFather Username & App Short Name
 BOT_USERNAME = "tt_uploader_bot"  
 APP_SHORT_NAME = "myapp"         
 MINI_APP_LINK = f"https://t.me/{BOT_USERNAME}/{APP_SHORT_NAME}"
 
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
-# Language Dictionary (Firebase lang နဲ့ ညှိထားသည်)
+# Language Sync (Mini App ဘက်က lang အတိုင်း သုံးမည်)
 TEXTS = {
     'my': {
         'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
@@ -29,7 +29,7 @@ TEXTS = {
         'part_label': "အပိုင်း",
         'end_tag': " (ဇာတ်သိမ်းပိုင်း) ✅",
         'forward_msg': "✅ ဗီဒီယိုကို မှတ်မိပါသည်။ Mini App တွင် အသေးစိတ်ဖြည့်ရန် အောက်ပါခလုတ်ကို နှိပ်ပါ။",
-        'menu_open': "🚀 Mini App ဖွင့်ရန်"
+        'btn_open': "🚀 Mini App ဖွင့်ရန်"
     },
     'en': {
         'intro': "🎬 **Welcome to Movie Spliter Bot**",
@@ -37,37 +37,37 @@ TEXTS = {
         'part_label': "Part",
         'end_tag': " (End Part) ✅",
         'forward_msg': "✅ Video recognized! Click the button below to fill details in Mini App.",
-        'menu_open': "🚀 Open Mini App"
+        'btn_open': "🚀 Open Mini App"
     }
 }
 
-# --- [ 1. Handle Messages & Forward ] ---
+# --- [ 1. Handle Messages ] ---
 @client.on(events.NewMessage)
 async def handle_messages(event):
     uid = str(event.sender_id)
     user_ref = db.collection('users').document(uid)
     u_doc = user_ref.get()
-    
-    # App.py မှာ ရွေးထားတဲ့ language ကို ယူသုံးခြင်း
     lang = u_doc.to_dict().get('lang', 'my') if u_doc.exists else 'my'
 
     if event.text == '/start':
+        # Inline Button သီးသန့်ပဲ သုံးပါမည် (Error ကင်းစေရန်)
         await event.respond(
             TEXTS[lang]['intro'], 
-            buttons=[
-                [Button.url(TEXTS[lang]['menu_open'], MINI_APP_LINK)],
-                [Button.text("👤 My Profile"), Button.text("💎 Buy Premium")]
-            ]
+            buttons=[[Button.url(TEXTS[lang]['btn_open'], MINI_APP_LINK)]]
         )
         return
 
-    # Forward Logic: Video Link parameter ဆောက်သည်
+    # Forward Logic: Video URL parameter ဆောက်သည်
     if event.message.video or event.message.document:
         msg_id = event.message.id
         video_url = f"https://t.me/me/{msg_id}" 
         encoded_url = urllib.parse.quote(video_url)
         app_link = f"{MINI_APP_LINK}?startapp={encoded_url}"
-        await event.respond(TEXTS[lang]['forward_msg'], buttons=[[Button.url(TEXTS[lang]['menu_open'], app_link)]])
+        
+        await event.respond(
+            TEXTS[lang]['forward_msg'], 
+            buttons=[[Button.url(TEXTS[lang]['btn_open'], app_link)]]
+        )
 
 # --- [ 2. Background Ack Handler ] ---
 async def ack_handler():
@@ -82,11 +82,10 @@ async def ack_handler():
             await asyncio.sleep(5)
         except: await asyncio.sleep(10)
 
-# --- [ 3. Worker Engine (All Original Functions Restored) ] ---
+# --- [ 3. Worker Engine ] ---
 async def worker_engine():
     while True:
         try:
-            # Processing ဖြစ်နေတာရှိရင် resume လုပ်မယ်
             tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "processing")).limit(1).get()
             if not tasks:
                 tasks = db.collection('tasks').where(filter=FieldFilter("status", "==", "queued")).order_by("createdAt", direction=firestore.Query.ASCENDING).limit(1).get()
@@ -122,13 +121,12 @@ async def worker_engine():
                 else:
                     subprocess.run(['ffmpeg', '-y'] + v_in + ['-vf', drawtext, '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'copy', '-f', 'segment', '-segment_time', str(dur), '-reset_timestamps', '1', 'parts/p_%03d.mp4'], check=True)
 
-            # Delivery: Multi-lang Caption Restored
+            # Delivery: Multi-lang Caption
             files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
             ls_idx, movie_name, total_parts = data.get('last_sent_index', -1), data.get('name') or "Movie", len(files)
             for idx, p in enumerate(files):
                 if idx > ls_idx:
                     curr = idx + 1
-                    # ⚠️ ဤနေရာတွင် lang အလိုက် Caption ပြောင်းလဲပါသည်
                     caption = f"🎬 {movie_name} - {TEXTS[lang]['part_label']} ({curr})"
                     if curr == total_parts: caption += TEXTS[lang]['end_tag']
                     await client.send_file(uid, f"parts/{p}", caption=caption)
@@ -140,6 +138,7 @@ async def worker_engine():
 
         except Exception as e: print(f"Error: {e}"); await asyncio.sleep(10)
 
+# --- [ Parallel Run ] ---
 async def main():
     await client.start()
     await asyncio.gather(ack_handler(), worker_engine(), client.run_until_disconnected())
