@@ -1,4 +1,4 @@
-import os, base64, subprocess, asyncio, firebase_admin, json, shutil, time
+import os, base64, subprocess, asyncio, firebase_admin, json, shutil, time, urllib.parse
 from firebase_admin import credentials, firestore
 from telethon import TelegramClient, events, types
 from telethon.sessions import StringSession
@@ -14,47 +14,65 @@ API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
 SESSION_STRING = os.getenv("SESSION_STRING")
 WEB_URL = os.getenv("WEB_APP_URL", "https://yttott-28862.web.app/")
+# Mini App Link (ဥပမာ - https://t.me/YourBotName/AppName)
+MINI_APP_LINK = "https://t.me/yttott_bot/app" 
 
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
 TEXTS = {
     'my': {
-        'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**\n\nForward လုပ်ထားသော ဗီဒီယို သို့မဟုတ် Link များပို့ပေးပါ။",
+        'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**\n\nForward ဗီဒီယို သို့မဟုတ် Link များ ပို့ပေးနိုင်ပါသည်။",
         'ack': "ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပေးပါ။ အစီအစဉ်အတိုင်း ပြန်လည်ပို့ဆောင်ပေးပါမည်။",
         'menu': ["🚀 Mini App ဖွင့်ရန်", "👤 My Profile", "💎 Premium ဝယ်ရန်"],
         'part_label': "အပိုင်း",
-        'end_tag': " (ဇာတ်သိမ်းပိုင်း) ✅"
+        'end_tag': " (ဇာတ်သိမ်းပိုင်း) ✅",
+        'forward_msg': "✅ ဗီဒီယိုကို မှတ်မိပါသည်။ Mini App တွင် အသေးစိတ်ဖြည့်ရန် အောက်ပါခလုတ်ကို နှိပ်ပါ။"
     },
     'en': {
-        'intro': "🎬 **Welcome to Movie Spliter Bot**\n\nSend me forwarded videos or movie links.",
+        'intro': "🎬 **Welcome to Movie Spliter Bot**\n\nPlease send forwarded videos or links.",
         'ack': "Video received! Please wait. Your split videos will be sent in order.",
         'menu': ["🚀 Open Mini App", "👤 My Profile", "💎 Buy Premium"],
         'part_label': "Part",
-        'end_tag': " (End Part) ✅"
+        'end_tag': " (End Part) ✅",
+        'forward_msg': "✅ Video recognized! Click the button below to fill details in Mini App."
     }
 }
 
 def get_menu(lang):
     l = lang if lang in TEXTS else 'my'
-    # Fixed ReplyMarkup for latest Telethon
-    buttons = [
-        [types.KeyboardButtonWebApp(text=TEXTS[l]['menu'][0], url=WEB_URL)],
-        [types.KeyboardButton(text=TEXTS[l]['menu'][1]), types.KeyboardButton(text=TEXTS[l]['menu'][2])]
-    ]
+    buttons = [[types.KeyboardButtonWebApp(text=TEXTS[l]['menu'][0], url=WEB_URL)],
+               [types.KeyboardButton(text=TEXTS[l]['menu'][1]), types.KeyboardButton(text=TEXTS[l]['menu'][2])]]
     return types.ReplyKeyboardMarkup(rows=[types.KeyboardRow(b) for b in buttons], resize=True, persistent=True)
 
-# --- [ 1. Start Handler & User Register ] ---
-@client.on(events.NewMessage(pattern='/start'))
-async def start_handler(event):
+# --- [ 1. Start & Forward Link Handler ] ---
+@client.on(events.NewMessage)
+async def handle_messages(event):
     uid = str(event.sender_id)
     user_ref = db.collection('users').document(uid)
     u_doc = user_ref.get()
     lang = u_doc.to_dict().get('lang', 'my') if u_doc.exists else 'my'
-    
-    if not u_doc.exists:
-        user_ref.set({'uid': uid, 'lang': 'my', 'is_premium': False, 'expiry_date': 'N/A', 'createdAt': firestore.SERVER_TIMESTAMP})
-    
-    await event.respond(TEXTS[lang]['intro'], buttons=get_menu(lang))
+
+    if event.text == '/start':
+        if not u_doc.exists:
+            user_ref.set({'uid': uid, 'lang': 'my', 'is_premium': False, 'expiry_date': 'N/A', 'createdAt': firestore.SERVER_TIMESTAMP})
+        await event.respond(TEXTS[lang]['intro'], buttons=get_menu(lang))
+        return
+
+    # Forward ဗီဒီယို သို့မဟုတ် Link ကို စစ်ဆေးခြင်း
+    video_url = ""
+    if event.message.video:
+        # Public Channel ဆိုလျှင် Link ယူသည်၊ မဟုတ်လျှင် Bot ဆီ တိုက်ရိုက်ပို့ခိုင်းသည်
+        if event.is_channel:
+            video_url = f"https://t.me/{event.chat.username}/{event.message.id}" if event.chat.username else f"https://t.me/c/{event.chat_id}/{event.message.id}"
+    elif event.text and ("http" in event.text or "t.me/" in event.text):
+        video_url = event.text.strip()
+
+    if video_url:
+        encoded_url = urllib.parse.quote(video_url)
+        # Parameter ကို startapp အနေနဲ့ ပို့သည်
+        app_link = f"{MINI_APP_LINK}?startapp={encoded_url}"
+        btn = [[types.KeyboardButtonWebApp(text=TEXTS[lang]['menu'][0], url=app_link)]]
+        await event.respond(TEXTS[lang]['forward_msg'], buttons=types.ReplyKeyboardMarkup(rows=[types.KeyboardRow(b) for b in btn], resize=True))
 
 # --- [ 2. Background Ack Handler ] ---
 async def ack_handler():
@@ -83,33 +101,20 @@ async def worker_engine():
             uid, lang, v_url = int(data.get('user_id', 0)), data.get('lang', 'my'), data.get('value', '').strip()
             if data['status'] == 'queued': ref.update({'status': 'processing'})
 
-            # --- [ Phase: Intelligent Download ] ---
+            # Download Logic (Telegram + Web Links)
             if not os.path.exists("vid.mp4"):
-                print(f"📥 Downloading: {v_url}")
-                # Telegram Forwarded Message OR Link Fix
                 if "t.me/" in v_url:
                     try:
                         p = v_url.split('/')
-                        # Handling private/public links (t.me/c/xxx/123 or t.me/channel/123)
                         channel = int(f"-100{p[-2]}") if p[-2].isdigit() else p[-2]
                         msg = await client.get_messages(channel, ids=int(p[-1]))
                         await client.download_media(msg, "vid.mp4")
-                    except Exception as e:
-                        print(f"Tele-Download Error: {e}")
-                else:
-                    # yt-dlp with auto-redirect for short URLs and best compatibility
-                    cmd = [
-                        'yt-dlp', 
-                        '--no-check-certificate', 
-                        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                        '--follow-redirects',
-                        '-f', 'mp4', 
-                        '-o', 'vid.mp4', 
-                        v_url
-                    ]
-                    subprocess.run(cmd, check=True, timeout=900)
+                    except: pass
+                
+                if not os.path.exists("vid.mp4"):
+                    subprocess.run(['yt-dlp', '--no-check-certificate', '--follow-redirects', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
 
-            # --- [ Phase: FFmpeg Processing ] ---
+            # FFmpeg Splitting (Logo 60% Alpha + Watermark)
             os.makedirs("parts", exist_ok=True)
             if not os.listdir("parts"):
                 dur = sum(x * 60**i for i, x in enumerate(map(int, reversed((data.get('len') or "5:00").split(':')))))
@@ -126,17 +131,15 @@ async def worker_engine():
                 else:
                     subprocess.run(['ffmpeg', '-y'] + v_in + ['-vf', drawtext, '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'copy', '-f', 'segment', '-segment_time', str(dur), '-reset_timestamps', '1', 'parts/p_%03d.mp4'], check=True)
 
-            # --- [ Phase: Delivery ] ---
+            # Smart Delivery (Multi-lang Caption & End Tag)
             files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
             ls_idx, movie_name, total_parts = data.get('last_sent_index', -1), data.get('name') or "Movie Name", len(files)
             
             for idx, p in enumerate(files):
                 if idx > ls_idx:
                     curr = idx + 1
-                    label = TEXTS[lang]['part_label']
-                    caption = f"🎬 {movie_name} - {label} ({curr})"
+                    caption = f"🎬 {movie_name} - {TEXTS[lang]['part_label']} ({curr})"
                     if curr == total_parts: caption += TEXTS[lang]['end_tag']
-                    
                     await client.send_file(uid, f"parts/{p}", caption=caption, buttons=get_menu(lang))
                     ref.update({'last_sent_index': idx})
 
@@ -147,7 +150,7 @@ async def worker_engine():
         except Exception as e:
             print(f"🚨 Error: {e}"); await asyncio.sleep(10)
 
-# --- [ Phase: Parallel Execution ] ---
+# --- [ Execution ] ---
 async def main():
     await client.start()
     await asyncio.gather(ack_handler(), worker_engine(), client.run_until_disconnected())
