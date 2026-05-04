@@ -13,28 +13,26 @@ db = firestore.client()
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
 SESSION_STRING = os.getenv("SESSION_STRING")
-WEB_URL = "https://yttott-28862.web.app/" # မိတ်ဆွေရဲ့ Firebase Web URL
 
-# ⚠️ မိတ်ဆွေရဲ့ BotFather Screenshot အရ အောက်ပါအတိုင်း အတိအကျ ပြင်လိုက်ပါပြီ
-BOT_USERNAME = "tt_uploader_bot"  # မိတ်ဆွေရဲ့ Bot Username
-APP_SHORT_NAME = "myapp"         # မိတ်ဆွေပေးထားတဲ့ Short Name
+# BotFather Screenshot အရ အတိအကျ ပြင်ဆင်ထားသည်
+BOT_USERNAME = "tt_uploader_bot"  
+APP_SHORT_NAME = "myapp"         
 MINI_APP_LINK = f"https://t.me/{BOT_USERNAME}/{APP_SHORT_NAME}"
+WEB_URL = "https://yttott-28862.web.app/"
 
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
 TEXTS = {
     'my': {
-        'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**\n\nဗီဒီယိုကို Forward လုပ်ပါ။ ရရှိလာသော ခလုတ်ကိုနှိပ်ပြီး Mini App တွင် အချက်အလက်ဖြည့်ပါ။",
+        'intro': "🎬 **Movie Spliter Bot မှ ကြိုဆိုပါတယ်**",
         'ack': "ဗီဒီယို လက်ခံရရှိပါသည် ခဏစောင့်ပေးပါ။ အစီအစဉ်အတိုင်း ပြန်လည်ပို့ဆောင်ပေးပါမည်။",
-        'menu': ["🚀 Mini App ဖွင့်ရန်", "👤 My Profile", "💎 Premium ဝယ်ရန်"],
         'part_label': "အပိုင်း",
         'end_tag': " (ဇာတ်သိမ်းပိုင်း) ✅",
         'forward_msg': "✅ ဗီဒီယိုကို မှတ်မိပါသည်။ Mini App တွင် အသေးစိတ်ဖြည့်ရန် အောက်ပါခလုတ်ကို နှိပ်ပါ။"
     },
     'en': {
-        'intro': "🎬 **Welcome to Movie Spliter Bot**\n\nPlease forward a video and click the link to fill details in Mini App.",
+        'intro': "🎬 **Welcome to Movie Spliter Bot**",
         'ack': "Video received! Please wait. Your split videos will be sent in order.",
-        'menu': ["🚀 Open Mini App", "👤 My Profile", "💎 Buy Premium"],
         'part_label': "Part",
         'end_tag': " (End Part) ✅",
         'forward_msg': "✅ Video recognized! Click the button below to fill details in Mini App."
@@ -43,13 +41,10 @@ TEXTS = {
 
 def get_menu(lang):
     l = lang if lang in TEXTS else 'my'
-    # Fixed Button Logic
-    return [
-        [Button.url(TEXTS[l]['menu'][0], MINI_APP_LINK)],
-        [Button.text(TEXTS[l]['menu'][1]), Button.text(TEXTS[l]['menu'][2])]
-    ]
+    return [[Button.url("🚀 Mini App ဖွင့်ရန်", MINI_APP_LINK)],
+            [Button.text("👤 My Profile"), Button.text("💎 Buy Premium")]]
 
-# --- [ 1. Start & Forward Link Handler ] ---
+# --- [ 1. Handle Forward & /start ] ---
 @client.on(events.NewMessage)
 async def handle_messages(event):
     uid = str(event.sender_id)
@@ -63,21 +58,13 @@ async def handle_messages(event):
         await event.respond(TEXTS[lang]['intro'], buttons=get_menu(lang))
         return
 
-    # User က Video တစ်ခု Forward လုပ်လိုက်လျှင်
+    # Forward Logic: Video Link parameter ဆောက်သည်
     if event.message.video or event.message.document:
-        # Message ID ကို အခြေခံပြီး Link ဆောက်သည်
-        # Private chat ဖြစ်စေ၊ Channel ဖြစ်စေ Bot က message id ကို သိလျှင် ဒေါင်းနိုင်ပါသည်
         msg_id = event.message.id
         video_url = f"https://t.me/me/{msg_id}" 
-        
         encoded_url = urllib.parse.quote(video_url)
-        # startapp parameter ဖြင့် Mini App link ကို ပို့သည်
-        app_link_with_param = f"{MINI_APP_LINK}?startapp={encoded_url}"
-        
-        await event.respond(
-            TEXTS[lang]['forward_msg'], 
-            buttons=[[Button.url("🚀 Open in Mini App", app_link_with_param)]]
-        )
+        app_link = f"{MINI_APP_LINK}?startapp={encoded_url}"
+        await event.respond(TEXTS[lang]['forward_msg'], buttons=[[Button.url("🚀 Open in Mini App", app_link)]])
 
 # --- [ 2. Background Ack Handler ] ---
 async def ack_handler():
@@ -87,12 +74,12 @@ async def ack_handler():
             for p in pendings:
                 data = p.to_dict()
                 uid, lang = int(data.get('user_id', 0)), data.get('lang', 'my')
-                await client.send_message(uid, TEXTS[lang]['ack'], buttons=get_menu(lang))
+                await client.send_message(uid, TEXTS[lang]['ack'])
                 p.reference.update({'status': 'queued'})
             await asyncio.sleep(5)
         except: await asyncio.sleep(10)
 
-# --- [ 3. Worker Engine ] ---
+# --- [ 3. Worker Engine (All Functions Restored) ] ---
 async def worker_engine():
     while True:
         try:
@@ -106,25 +93,19 @@ async def worker_engine():
             uid, lang, v_url = int(data.get('user_id', 0)), data.get('lang', 'my'), data.get('value', '').strip()
             if data['status'] == 'queued': ref.update({'status': 'processing'})
 
+            # Download
             if not os.path.exists("vid.mp4"):
                 if "t.me/" in v_url:
-                    try:
-                        # Link ထဲက Message ID ကို ပြန်ယူသည်
-                        msg_id = int(v_url.split('/')[-1])
-                        # Bot ဆီရောက်နေသော message ကို download ဆွဲသည်
-                        msg = await client.get_messages(uid, ids=msg_id)
-                        await client.download_media(msg, "vid.mp4")
-                    except Exception as e:
-                        print(f"Tele Download Error: {e}")
-                
-                # Link ဖြစ်လျှင် yt-dlp ဖြင့် ဒေါင်းသည်
-                if not os.path.exists("vid.mp4"):
+                    msg_id = int(v_url.split('/')[-1])
+                    msg = await client.get_messages(uid, ids=msg_id)
+                    await client.download_media(msg, "vid.mp4")
+                else:
                     subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
 
+            # FFmpeg: Logo 60% Alpha + Watermark Restored
             os.makedirs("parts", exist_ok=True)
             if not os.listdir("parts") and os.path.exists("vid.mp4"):
-                dur_str = data.get('len') or "5:00"
-                dur = sum(x * 60**i for i, x in enumerate(map(int, reversed(dur_str.split(':')))))
+                dur = sum(x * 60**i for i, x in enumerate(map(int, reversed((data.get('len') or "5:00").split(':')))))
                 wm = data.get('wm', '')
                 drawtext = f"drawtext=text='{wm}':x='(w-text_w)/2+(w-text_w)/2*sin(t/2)':y='(h-text_h)/2+(h-text_h)/2*sin(t/3)':fontfile='Pyidaungsu.ttf':fontcolor=white@0.4:fontsize=50" if wm else "null"
                 
@@ -138,9 +119,9 @@ async def worker_engine():
                 else:
                     subprocess.run(['ffmpeg', '-y'] + v_in + ['-vf', drawtext, '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'copy', '-f', 'segment', '-segment_time', str(dur), '-reset_timestamps', '1', 'parts/p_%03d.mp4'], check=True)
 
+            # Delivery: Multi-lang Caption Restored
             files = sorted([f for f in os.listdir("parts") if f.endswith(".mp4")])
-            ls_idx, movie_name, total_parts = data.get('last_sent_index', -1), data.get('name') or "Movie Name", len(files)
-            
+            ls_idx, movie_name, total_parts = data.get('last_sent_index', -1), data.get('name') or "Movie", len(files)
             for idx, p in enumerate(files):
                 if idx > ls_idx:
                     curr = idx + 1
@@ -154,7 +135,7 @@ async def worker_engine():
             if os.path.exists("logo.png"): os.remove("logo.png")
 
         except Exception as e:
-            print(f"🚨 Error: {e}"); await asyncio.sleep(10)
+            print(f"Error: {e}"); await asyncio.sleep(10)
 
 async def main():
     await client.start()
