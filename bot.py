@@ -13,8 +13,12 @@ db = firestore.client()
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
 SESSION_STRING = os.getenv("SESSION_STRING")
-MINI_APP_LINK = "https://t.me/movies_spliter_bot/app" 
-WEB_URL = os.getenv("WEB_APP_URL", "https://yttott-28862.web.app/")
+WEB_URL = "https://yttott-28862.web.app/" # မိတ်ဆွေရဲ့ Firebase Web URL
+
+# ⚠️ မိတ်ဆွေရဲ့ BotFather Screenshot အရ အောက်ပါအတိုင်း အတိအကျ ပြင်လိုက်ပါပြီ
+BOT_USERNAME = "tt_uploader_bot"  # မိတ်ဆွေရဲ့ Bot Username
+APP_SHORT_NAME = "myapp"         # မိတ်ဆွေပေးထားတဲ့ Short Name
+MINI_APP_LINK = f"https://t.me/{BOT_USERNAME}/{APP_SHORT_NAME}"
 
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
@@ -37,12 +41,11 @@ TEXTS = {
     }
 }
 
-# --- [ Button Builder Fixed ] ---
 def get_menu(lang):
     l = lang if lang in TEXTS else 'my'
-    # Button object ကို တိုက်ရိုက်သုံးခြင်းက ပိုစိတ်ချရပါသည်
+    # Fixed Button Logic
     return [
-        [Button.url(TEXTS[l]['menu'][0], WEB_URL)],
+        [Button.url(TEXTS[l]['menu'][0], MINI_APP_LINK)],
         [Button.text(TEXTS[l]['menu'][1]), Button.text(TEXTS[l]['menu'][2])]
     ]
 
@@ -60,19 +63,21 @@ async def handle_messages(event):
         await event.respond(TEXTS[lang]['intro'], buttons=get_menu(lang))
         return
 
-    # Forward Logic
-    video_url = ""
+    # User က Video တစ်ခု Forward လုပ်လိုက်လျှင်
     if event.message.video or event.message.document:
-        if event.is_channel:
-            video_url = f"https://t.me/c/{event.chat_id}/{event.message.id}"
-        else:
-            # Bot ဆီ တိုက်ရိုက်ရောက်လာသော message link
-            video_url = f"https://t.me/me/{event.message.id}"
-
-    if video_url:
+        # Message ID ကို အခြေခံပြီး Link ဆောက်သည်
+        # Private chat ဖြစ်စေ၊ Channel ဖြစ်စေ Bot က message id ကို သိလျှင် ဒေါင်းနိုင်ပါသည်
+        msg_id = event.message.id
+        video_url = f"https://t.me/me/{msg_id}" 
+        
         encoded_url = urllib.parse.quote(video_url)
-        app_link = f"{MINI_APP_LINK}?startapp={encoded_url}"
-        await event.respond(TEXTS[lang]['forward_msg'], buttons=[[Button.url("🚀 Open in Mini App", app_link)]])
+        # startapp parameter ဖြင့် Mini App link ကို ပို့သည်
+        app_link_with_param = f"{MINI_APP_LINK}?startapp={encoded_url}"
+        
+        await event.respond(
+            TEXTS[lang]['forward_msg'], 
+            buttons=[[Button.url("🚀 Open in Mini App", app_link_with_param)]]
+        )
 
 # --- [ 2. Background Ack Handler ] ---
 async def ack_handler():
@@ -104,16 +109,20 @@ async def worker_engine():
             if not os.path.exists("vid.mp4"):
                 if "t.me/" in v_url:
                     try:
-                        p = v_url.split('/')
-                        msg = await client.get_messages(uid, ids=int(p[-1]))
+                        # Link ထဲက Message ID ကို ပြန်ယူသည်
+                        msg_id = int(v_url.split('/')[-1])
+                        # Bot ဆီရောက်နေသော message ကို download ဆွဲသည်
+                        msg = await client.get_messages(uid, ids=msg_id)
                         await client.download_media(msg, "vid.mp4")
-                    except: pass
+                    except Exception as e:
+                        print(f"Tele Download Error: {e}")
                 
+                # Link ဖြစ်လျှင် yt-dlp ဖြင့် ဒေါင်းသည်
                 if not os.path.exists("vid.mp4"):
                     subprocess.run(['yt-dlp', '--no-check-certificate', '-f', 'mp4', '-o', 'vid.mp4', v_url], check=True)
 
             os.makedirs("parts", exist_ok=True)
-            if not os.listdir("parts"):
+            if not os.listdir("parts") and os.path.exists("vid.mp4"):
                 dur_str = data.get('len') or "5:00"
                 dur = sum(x * 60**i for i, x in enumerate(map(int, reversed(dur_str.split(':')))))
                 wm = data.get('wm', '')
@@ -147,7 +156,6 @@ async def worker_engine():
         except Exception as e:
             print(f"🚨 Error: {e}"); await asyncio.sleep(10)
 
-# --- [ 4. Entry Point Fixed ] ---
 async def main():
     await client.start()
     await asyncio.gather(ack_handler(), worker_engine(), client.run_until_disconnected())
