@@ -1,11 +1,13 @@
-name: Video Processor
+Name: Video Processor
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
+  schedule:
+    # ၅ နာရီခွဲ တစ်ကြိမ် (၆ နာရီမပြည့်ခင်) အလိုအလျောက် အသစ်တစ်ခု ပြန်မောင်းပေးဖို့ပါ
+    - cron: '0 */5 * * *'
 
-# ဒီအပိုင်းက တစ်ခုထက်ပို Run ရင် အသစ်ကို Queue ထဲပဲ ထည့်ထားမှာပါ (အချင်းချင်း သတ်မှာမဟုတ်တော့ပါ)
 concurrency:
   group: video-processor
   cancel-in-progress: false 
@@ -13,20 +15,38 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # တစ်ခါတစ်လေ GitHub ဘက်က error တက်ရင် ၃ ကြိမ်အထိ အလိုအလျောက် ပြန်ကြိုးစားခိုင်းတာပါ
+    continue-on-error: true
+    
     steps:
       - uses: actions/checkout@v3
+      
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+          
       - name: Install Tools
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install telethon firebase-admin yt-dlp
+          pip install telethon firebase-admin yt-dlp requests
+          
       - name: Run Worker
-        run: python bot.py
+        run: |
+          # ၅ နာရီ ၄၅ မိနစ် (၂၀၇၀၀ စက္ကန့်) ကြာရင် အလိုအလျောက် ရပ်သွားအောင် timeout ခံထားပေးမယ်
+          # ဒါမှ GitHub က အတင်းပိတ်မချခင် အေးဆေး ရပ်သွားပြီး နောက်တစ်ခု အသစ်ပြန်ပွင့်နိုင်မှာပါ
+          timeout 20700s python bot.py || true
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           SESSION_STRING: ${{ secrets.SESSION_STRING }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           WEB_APP_URL: ${{ secrets.WEB_APP_URL }}
+
+      # 💡 ဒီအဆင့်က Bot ရပ်သွားတဲ့အခါ GitHub API ကို သုံးပြီး Workflow ကို ကိုယ်တိုင် ပြန်နှိုးပေးမှာပါ
+      - name: Trigger Next Run
+        if: always()
+        run: |
+          curl -X POST -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches \
+          -d '{"ref":"main"}'
