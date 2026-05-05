@@ -9,32 +9,25 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-    <script src="https://heavenlysuspicious.com/05/d1/b8/05d1b83f15627bbec3a9dda0da58b3be.js"></script>
-    <script src="https://heavenlysuspicious.com/5b/eb/97/5beb971a0befc04b29f08c6168cf169b.js"></script>
-
     <style>
         :root { --gold: linear-gradient(45deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c); --dark: #000; }
         
-        /* Screen Fix: ပုံသေဖြစ်အောင်လုပ်ထားသည် */
         html, body { 
             height: 100%; width: 100%; overflow: hidden; 
             background: var(--dark); color: #fff; font-family: sans-serif; 
             margin: 0; padding: 0; position: fixed; 
         }
 
-        body {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
 
-        /* Fixed Banners */
-        .ad-top { position: fixed; top: 0; left: 0; width: 100%; height: 90px; z-index: 1000; display: flex; justify-content: center; background: #000; overflow: hidden; }
-        .ad-bottom { position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; z-index: 1000; display: flex; justify-content: center; background: #000; overflow: hidden; }
+        /* ကြော်ငြာကွန်တိန်နာများကို မူလအားဖြင့် ဖျောက်ထားမည် */
+        .ad-top { position: fixed; top: 0; left: 0; width: 100%; height: 90px; z-index: 1000; display: none; justify-content: center; background: #000; overflow: hidden; }
+        .ad-bottom { position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; z-index: 1000; display: none; justify-content: center; background: #000; overflow: hidden; }
 
         .card { 
             background: rgba(255,255,255,0.05); backdrop-filter: blur(25px); padding: 25px; 
             border-radius: 28px; border: 1px solid rgba(191,149,63,0.3); 
             width: 85%; max-width: 360px; text-align: center; position: relative; z-index: 100;
-            margin-top: 30px; /* Banner နဲ့ မငြိအောင် */
         }
         
         h2 { background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; font-size: 20px; margin-bottom: 20px; font-weight: 800; }
@@ -56,12 +49,8 @@
 </head>
 <body>
 
-    <div class="ad-top">
-        <script type="text/javascript">
-            atOptions = { 'key' : 'd399bebc73df20ce064bc87255c85c45', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
-        </script>
-        <script type="text/javascript" src="https://heavenlysuspicious.com/d399bebc73df20ce064bc87255c85c45/invoke.js"></script>
-    </div>
+    <div class="ad-top" id="ad-top-box"></div>
+    <div class="ad-bottom" id="ad-bottom-box"></div>
 
     <div class="card">
         <h2 id="title">Luxury Spliter</h2>
@@ -107,13 +96,6 @@
         </div>
     </div>
 
-    <div class="ad-bottom">
-        <script type="text/javascript">
-            atOptions = { 'key' : 'b3be95eaddc2ac3ec2323b160e5ea5f5', 'format' : 'iframe', 'height' : 60, 'width' : 468, 'params' : {} };
-        </script>
-        <script type="text/javascript" src="https://heavenlysuspicious.com/b3be95eaddc2ac3ec2323b160e5ea5f5/invoke.js"></script>
-    </div>
-
     <script>
         firebase.initializeApp({ projectId: "yttott-28862" });
         const db = firebase.firestore(), tg = window.Telegram.WebApp;
@@ -121,24 +103,67 @@
         let logoData = "", selectedPos = "tr", userLang = "my";
 
         tg.expand();
-        tg.disableVerticalSwiping(); // Screen မရွေ့အောင် Telegram ဘက်ကပါ ပိတ်ထားသည်
+        tg.disableVerticalSwiping();
 
-        // ✅ URL မှ Link ကို Auto-fill လုပ်ပေးသည့် Logic
+        // URL Auto-fill
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             const autoLink = urlParams.get('link');
-            if (autoLink) {
-                document.getElementById('vLink').value = decodeURIComponent(autoLink);
-            }
+            if (autoLink) document.getElementById('vLink').value = decodeURIComponent(autoLink);
         };
 
-        // ဘာသာစကား သိမ်းဆည်းမှု စစ်ဆေးသည်
+        // Premium နဲ့ Language စစ်ဆေးခြင်း
         db.collection('users').doc(uid).get().then(doc => {
             if(doc.exists) { 
-                userLang = doc.data().lang || "my"; 
-                applyLang(userLang); 
+                const userData = doc.data();
+                userLang = userData.lang || "my"; 
+                applyLang(userLang);
+
+                // ✅ Premium မဟုတ်မှသာ ကြော်ငြာများကို Load လုပ်မည်
+                if (userData.is_premium !== true) {
+                    loadAds();
+                }
+            } else {
+                // User အသစ်ဆိုလျှင်လည်း ကြော်ငြာပြမည်
+                loadAds();
+                applyLang("my");
             }
         });
+
+        // ကြော်ငြာများကို Dynamic ပုံစံဖြင့် Load လုပ်ပေးမည့် Function
+        function loadAds() {
+            // Display Containers
+            document.getElementById('ad-top-box').style.display = 'flex';
+            document.getElementById('ad-bottom-box').style.display = 'flex';
+
+            // Load Popunder Script
+            let pop = document.createElement('script');
+            pop.src = "https://heavenlysuspicious.com/05/d1/b8/05d1b83f15627bbec3a9dda0da58b3be.js";
+            document.head.appendChild(pop);
+
+            // Load Social Bar Script
+            let bar = document.createElement('script');
+            bar.src = "https://heavenlysuspicious.com/5b/eb/97/5beb971a0befc04b29f08c6168cf169b.js";
+            document.head.appendChild(bar);
+
+            // Load Top Banner (Iframe)
+            const topBox = document.getElementById('ad-top-box');
+            topBox.innerHTML = `
+                <script type="text/javascript">
+                    atOptions = { 'key' : 'd399bebc73df20ce064bc87255c85c45', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+                <\/script>
+                <script type="text/javascript" src="https://heavenlysuspicious.com/d399bebc73df20ce064bc87255c85c45/invoke.js"><\/script>
+            `;
+
+            // Load Bottom Banner (Iframe)
+            const botBox = document.getElementById('ad-bottom-box');
+            botBox.innerHTML = `
+                <script type="text/javascript">
+                    atOptions = { 'key' : 'b3be95eaddc2ac3ec2323b160e5ea5f5', 'format' : 'iframe', 'height' : 60, 'width' : 468, 'params' : {} };
+                <\/script>
+                <script type="text/javascript" src="https://heavenlysuspicious.com/b3be95eaddc2ac3ec2323b160e5ea5f5/invoke.js"><\/script>
+            `;
+        }
 
         function applyLang(l) {
             const t = { 
@@ -204,8 +229,6 @@
                     lang: userLang, 
                     createdAt: firebase.firestore.FieldValue.serverTimestamp() 
                 });
-                
-                // Task ပို့ပြီးလျှင် Bot သို့ ပြန်သွားရန်
                 setTimeout(() => { tg.close(); }, 1200);
             } catch (e) {
                 alert("Error: " + e.message);
